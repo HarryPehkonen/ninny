@@ -76,9 +76,10 @@ run …` is one line, no install, no state, nothing to clean up, and it runs on 
 uv picks — it chose **3.14** for me on a project whose classifiers then stopped at 3.13. That
 is what zero dependencies buys.
 
-Verified: `python3 -m ninny doctor` with nothing installed, and `uvx --from . ninny doctor`
-ephemeral from a clone. The `git+https://…` forms are the identical code path and become
-usable as soon as this repository is public.
+Verified in this order: `python3 -m ninny doctor` with nothing installed; `uvx --from .
+ninny doctor` ephemeral from a clone; and, once this repository was public,
+`uvx --from git+https://github.com/HarryPehkonen/ninny ninny doctor`, which builds the
+package out of GitHub and runs it with no third-party import.
 
 ### Zero dependencies
 
