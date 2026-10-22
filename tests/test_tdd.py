@@ -179,6 +179,45 @@ class BypassTests(TDDBase):
         self.assertEqual(state.bypass_detected, [])
 
 
+class PathLandingTests(TDDBase):
+    """A path is classified by where it LANDS, not by how it is spelled.
+
+    `tests/../src/thing.py` is a source write that starts with `tests/`, and
+    `../../etc/passwd` never lands in the working tree at all. The gate used to
+    compare the string as written, so both walked straight past it.
+    """
+
+    def test_a_path_can_walk_out_of_the_tests_directory_into_the_source(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.assertTrue(policy.gate(self.write("tests/../src/thing.py"), state, 1))
+        self.assertTrue(policy.gate(self.write("tests/own/../../src/thing.py"), state, 1))
+
+    def test_a_path_that_leaves_the_tree_entirely_is_refused(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.assertTrue(policy.gate(self.write("../outside.py"), state, 1))
+        self.assertTrue(policy.gate(self.write("../../etc/passwd"), state, 1))
+
+    def test_ordinary_paths_are_unaffected(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.assertFalse(policy.gate(self.write("tests/own/test_x.py"), state, 1))
+        self.assertTrue(policy.gate(self.write("src/thing.py"), state, 1))
+
+    def test_a_resolving_source_path_is_allowed_once_red_has_been_seen(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"))
+        self.apply(policy, state, self.run_tests(), exit_code=1)
+        self.assertFalse(policy.gate(self.write("tests/../src/thing.py"), state, 3))
+
+    def test_the_instrument_cannot_be_reached_by_walking_around_it(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.assertTrue(policy.gate(self.write("tests/../tools/run_own_tests.sh"), state, 1))
+
+
 class ModeTests(TDDBase):
     def test_request_never_refuses_but_still_records(self):
         policy = self.policy_for("request")

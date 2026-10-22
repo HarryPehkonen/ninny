@@ -111,41 +111,56 @@ class TDDPolicy:
         return TDDState(mode=self.mode, phase="impl" if self.mode in ("off", "reverse") else "test")
 
     def _rel(self, path: str) -> str:
+        """Where a spelled path lands, relative to the working tree.
+
+        Follows `..`, `.` and absolute prefixes the way a real write does, so the
+        gate classifies the destination and not the spelling. Returns the empty
+        string when the path lands outside the working tree — nothing the file
+        tools may write is ever spelled that way.
+        """
         candidate = Path(path)
-        if candidate.is_absolute():
-            try:
-                return candidate.resolve().relative_to(self.workdir).as_posix()
-            except ValueError:
-                return candidate.as_posix()
-        return candidate.as_posix().lstrip("./")
+        target = candidate if candidate.is_absolute() else (self.workdir / candidate)
+        try:
+            resolved = target.resolve()
+        except OSError:
+            resolved = target
+        try:
+            return resolved.relative_to(self.workdir).as_posix()
+        except ValueError:
+            return ""
+
+    def _lands_outside(self, path: str) -> bool:
+        return self._rel(path) == ""
 
     # ---------------------------------------------------------------------- gate
     def gate(self, action, state: TDDState, step: int, src_write_suspect: str = "") -> str:
         """Return a refusal message to send back to the model, or '' to allow."""
-        protected = ""
-        if action.name == "write_file":
-            rel = self._rel(action.path)
-            if self.task.is_protected(rel):
-                protected = rel
-        elif action.name == "bash" and src_write_suspect:
-            rel = self._rel(src_write_suspect)
-            if self.task.is_protected(rel):
-                protected = rel
-        if protected:
-            state.refusals.append([step, f"protected: {protected}"])
-            return self._protected_message(protected)
+        path = action.path if action.name == "write_file" else src_write_suspect
+        rel = self._rel(path) if path else ""
+        if rel and self.task.is_protected(rel):
+            state.refusals.append([step, f"protected: {rel}"])
+            return self._protected_message(rel)
 
-        if self.mode != "enforce" or state.phase != "test":
+        if self.mode != "enforce":
+            return ""
+
+        # A path that never lands inside the working tree cannot be a legitimate
+        # write, in the test phase or after it.
+        if path and self._lands_outside(path):
+            state.refusals.append([step, f"outside: {path}"])
+            return self._refusal_message(path)
+
+        if state.phase != "test":
             return ""
         if action.name == "write_file":
-            rel = self._rel(action.path)
             if self.task.is_src_path(rel) and not state.red_ok:
                 state.refusals.append([step, rel])
                 return self._refusal_message(rel)
         if action.name == "bash" and src_write_suspect and not state.red_ok:
-            state.refusals.append([step, f"bash -> {src_write_suspect}"])
-            return self._refusal_message(src_write_suspect, via_shell=True)
-        if self.mode == "enforce" and action.is_submit() and not state.red_ok:
+            if rel and self.task.is_src_path(rel):
+                state.refusals.append([step, f"bash -> {src_write_suspect}"])
+                return self._refusal_message(src_write_suspect, via_shell=True)
+        if action.is_submit() and not state.red_ok:
             state.submit_refusals += 1
             if state.submit_refusals <= 1:
                 state.refusals.append([step, "submit"])
