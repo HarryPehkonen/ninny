@@ -1,87 +1,192 @@
 # Ninny
 
-A tiny coding-agent harness that **enforces and measures process, not just outcomes**.
+A tiny coding-agent harness that **turns process into a measurement**, not a request.
 
-Ninny is a fork of [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) (MIT),
-re-implemented on the standard library. It exists because of one measurement:
+Ninny answers two questions about a model writing code, and keeps the evidence for both:
 
-> Across 27 clean runs with 12 models, in two different harnesses, at every price
-> point, **not one run ever wrote a test and watched it fail before writing the code
-> it was testing.** Every harness asks for test-first in prose. None of them can
-> tell you whether it happened.
+1. **What did it do?** Every run leaves a record, a diff, and an oracle log — plus a
+   transcript in your state directory and a one-line index over every invocation.
+2. **Was there a failing test before the implementation?** That is a first-class result,
+   named in the record, not a claim in a prompt.
 
-Ninny can, and it will refuse to let a run proceed until it does.
+It exists because of one measurement: across **27 clean runs with 12 models**, in two
+different harnesses, at every price point, **not one run wrote a test and watched it fail
+before writing the code it was testing.** Every harness asks for test-first in prose. None
+of them could tell you whether it happened.
+
+Ninny is small on purpose: four actions, one loop, no dependencies, and a record you can
+check by hand.
+
+---
+
+## Built on mini-swe-agent
+
+Ninny is a **fork of [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) 2.4.6**
+by Kilian A. Lieret and Carlos E. Jimenez, released under the MIT licence. The upstream
+project describes itself as *"The 100 line AI agent that solves GitHub issues or helps you
+in your command line"* — and that minimalism is the root of this one. Its loop shape, its
+single `bash`-plus-submit interface, its submit sentinel, its format-error repair and its
+trajectory format are all upstream's design, and they are the reason a harness like this
+could be written at all.
+
+What Ninny changes is one thesis: mini asks *did the work get done*; Ninny asks *did the
+work get done, and is there any evidence about how*. That required a re-implementation on
+the standard library (see [Zero dependencies](#zero-dependencies)) and the additions
+described below. Where this project is wrong, the fault is Ninny's, not upstream's.
+
+- [NOTICE](NOTICE) — exactly what came from upstream, version and URL included.
+- [LICENSE.md](LICENSE.md) — the upstream MIT notice preserved verbatim, plus Ninny's.
+- Ninny is **not** mini-swe-agent and must never be described as such. The MIT licence
+  grants no trademark rights, and mislabelling a fork is how credit gets lost.
 
 ## What it is not
 
-No MCP. No multi-agent. No plugin system. No daemon, no server, no browser. Four
-actions, one loop, and a record. It measures a *process property* — did a failing
-test exist before the implementation — and it treats that as a first-class result
-alongside whether the code works.
+No MCP. No multi-agent. No plugin system. No daemon, no server, no browser. Four actions,
+one loop, and a record. The additions are allowed only when a *measured* failure justifies
+one — there is a note in the source for every one of them.
 
-## Zero dependencies
+It is also not a worker. Ninny is an **instrument**: it measures what a model-and-task
+does. The shape it can handle is one module, well specified, decided by the repo's own gate
+or an oracle, on a disposable tree. Four actions cannot do a multi-file refactor, and
+pretending otherwise is how a harness grows a plugin registry.
+
+## Install
+
+Ninny has no dependencies, so there is nothing to resolve and no virtualenv to prepare.
+
+```bash
+# nothing to install at all
+git clone https://github.com/HarryPehkonen/ninny && cd ninny
+python3 -m ninny doctor
+
+# as a command, ephemeral, no install and no state left behind
+uvx --from . ninny doctor
+uvx --from git+https://github.com/HarryPehkonen/ninny ninny doctor   # same code path
+
+# as a command, persistent
+uv tool install git+https://github.com/HarryPehkonen/ninny          # or pipx, or pip
+uv tool uninstall ninny                                            # undoes it
+```
+
+Once Ninny is published to PyPI those shorten to `uv tool install ninny` / `pip install ninny`.
+
+**For an agent, the ephemeral route is the one to reach for.** An agent cannot be handed a
+venv-activation step or a dependency resolution in the middle of a task; `uvx --from … ninny
+run …` is one line, no install, no state, nothing to clean up, and it runs on whatever Python
+uv picks — it chose **3.14** for me on a project whose classifiers then stopped at 3.13. That
+is what zero dependencies buys.
+
+Verified: `python3 -m ninny doctor` with nothing installed, and `uvx --from . ninny doctor`
+ephemeral from a clone. The `git+https://…` forms are the identical code path and become
+usable as soon as this repository is public.
+
+### Zero dependencies
+
+Ninny imports only the standard library, and that is not a slogan — the whole suite passes
+with site-packages switched off:
 
 ```
-pip install ninny     # installs nothing else
+python3 -S -m unittest discover -s tests -t .    # 154 tests, OK
 ```
 
-Ninny imports only the standard library, and that is not a slogan: the whole suite
-passes with site-packages switched off.
+Run on **Python 3.11, 3.12, 3.13 and 3.14**, 154 tests green on each, with no code changes
+between them. `requires-python = ">=3.11"` because `tomllib` is the one modern thing it uses.
 
-```
-python3 -S -m unittest discover -s tests -t .    # 130 tests, OK
-```
-
-It is a deliberate reversal of the upstream design, for a measured reason:
-mini-swe-agent declares **14 runtime requirements** — 35 `Requires-Dist` lines in all,
-the other 21 behind the `dev` / `modal` / `contree` extras, which are not what an
-install pulls — and **litellm, one of the 14, pulls in `mcp`**. It is the transitive
-source of a plugin protocol in what should be a 400-line loop, which is why installing
-mini needs `--with "mcp>=2.2.0,<3"` to stop a `ModuleNotFoundError` on the call path.
-`import litellm` also costs 2.7 s before any work happens. Dropping it dropped all of
-that.
+This is a deliberate reversal of the upstream design, for a measured reason: mini-swe-agent
+declares **14 runtime requirements** (35 `Requires-Dist` lines in total; the other 21 sit
+behind the `dev`/`modal`/`contree` extras, which are not what an install pulls), and
+**litellm — one of the 14 — pulls in `mcp`**. That is the transitive source of a plugin
+protocol inside what should be a 400-line loop; it is why installing mini needs
+`--with "mcp>=2.2.0,<3"` to avoid a `ModuleNotFoundError` on the call path. `import
+litellm` also costs 2.7 s before any work happens. Dropping it dropped all of that.
 
 ## Quickstart
 
 ```bash
-git clone https://github.com/HarryPehkonen/ninny
-cd ninny
-
 # 0. prove the task grades the way it must, before spending anything on it
 python3 -m ninny verify-task --task tasks/roman
 
 # 1. see what this machine can do
 python3 -m ninny doctor
 
-# 2. run a model against a task, with test-first enforced
-python3 -m ninny run \
-    --task tasks/roman \
-    --model deepseek/deepseek-v4.1-flash \
-    --provider local \
-    --tdd enforce
+# 2. run a model against a task
+python3 -m ninny run --task tasks/roman --model <model-id> --provider local
 
 # 3. judge it YOURSELF. The harness never grades its own subject.
 python3 -m ninny check --task tasks/roman --tree runs/roman/<arm>/tree
 ```
 
-Step 2 prints a record; step 3 is the verdict, and it is run by hand, per run.
+Step 2 prints a record; step 3 is the verdict, and it is run by hand, per run. A real run of
+the shipped example task, `deepseek/deepseek-v4.1-flash`, sandboxed with bubblewrap, defaults
+throughout (paths shortened; the record holds absolute ones):
 
-## Every run leaves three artifacts
+```
+=== Submitted ===
+exit=Submitted  steps=10  api_calls=10  cost=$0.0038
+tokens: in=35437 out=5494
+test-first: red-first  (mode=request, red_step=4, first_src_step=7, refusals=0, bypasses=0)
+  diff:       2 added, 1 changed, 0 deleted (+185 -5)
+  log:        ~/.local/state/ninny/logs/20261022-161343-run-default-told-r2.log
+```
 
-A number you cannot re-derive is a rumour. Each run writes:
+```
+$ python3 -m ninny check --task tasks/roman --tree runs/roman/default-told-r2/tree
+OK
+exit 0
+```
 
-- `trajectory.json` / `trajectory.md` — the record: every step, every refusal, the
-  verdict, the cost, and hashes of the spec and starting tree it came from
+## What every run leaves behind
+
+A number you cannot re-derive is a rumour. Each invocation writes four things:
+
+- `trajectory.json` / `trajectory.md` — the record: every step, every refusal, the verdict,
+  the cost, and the hashes of the spec and the starting tree it came from
 - `diff.patch` — what the run actually changed, against the tree it started from
-- `oracle.log` — written by `check`: the verdict and the output it came from
+- `oracle.log` — written by `check`: the verdict, and the output it came from
+- a **transcript in the state directory**, and one line in an index over every invocation
 
-When a result is reported, all three paths are named.
+When a result is reported, all four paths are named.
 
-`diff.patch` is not decoration. "What did it change?" was being answered by diffing two
-directories by hand, and that is how the last real bug in this project was found: a
-model edited `ninny/tdd.py` through a shell heredoc, and the record — which watched
-`write_file` — said no source file had ever been touched. A second opinion on the same
+`diff.patch` is not decoration. "What did it change?" used to be answered by diffing two
+directories by hand, and that is how the last real bug in this project was found: a model
+edited a source file through a shell heredoc, and the record — which watched `write_file`
+and nothing else — said no source file had ever been touched. A second opinion on the same
 question is what caught it.
+
+### The log, and the index
+
+The run directory answers *what happened in this run*. It does not answer *what has Ninny
+been doing, and where is the log of it* — and by the time an agent asks that, the terminal
+output is gone.
+
+```
+$XDG_STATE_HOME/ninny/logs/            (default: ~/.local/state/ninny/logs/, mode 0700)
+    20261022-160831-check-cron.log     the full transcript of one invocation, mode 0600
+    history.tsv                        one line per invocation, appended, never rewritten
+```
+
+Both streams are teed, not just stdout: the interesting line in a run that failed is the
+one on stderr, and an audit that stops at stdout is an audit of the happy path. The log
+wraps the failure paths too, so a run that dies still leaves both — otherwise the index
+would be a list of the runs that went right, which is exactly backwards.
+
+`history.tsv` names its columns on the first line and writes every column on every line,
+empty when a field does not apply, so column five is column five:
+
+```
+# timestamp	subcommand	task	model	exit_status	steps	cost_usd	verdict	run_dir	log_file
+2026-10-22T16:14:50	run	roman	deepseek/deepseek-v4.1-flash	Submitted	10	0.003846	red-first	.../runs/roman/default-told-r2	.../20261022-161343-run-default-told-r2.log
+2026-10-22T16:15:52	check	roman		0			OK		.../20261022-161552-check-roman.log
+```
+
+Two lines, two invocations: the run, and the judgement of it. The `check` line has no model
+and no steps because a `check` uses neither.
+
+A **registered API key is scrubbed on the way to disk**: the process writing the log is the
+process holding the key, and its reader may paste the file into a context window. A log
+directory that cannot be written is a warning, never a dead run — a harness that refuses to
+work because it cannot keep a diary is worse than one that keeps no diary. `--no-log` turns
+the whole thing off, on every subcommand.
 
 ## `verify-task`: a task is not trusted until it has been proved
 
@@ -90,9 +195,7 @@ fails on a solved tree makes the task unsolvable. Both directions, or neither:
 
 ```
 $ python3 -m ninny verify-task --task tasks/roman
-ninny verify-task: roman  (.../tasks/roman)
-
-  INFO  own test command fails on the tree the agent starts from   (exit 1 -- expected when the suite starts empty and the runner fails on an empty suite; ...)
+  INFO  own test command fails on the tree the agent starts from   (exit 1 -- expected ...)
   PASS  oracle is RED on the given tree   (exit 1)
   PASS  oracle is GREEN on the fixed tree   (exit 0)
 
@@ -101,98 +204,58 @@ VERIFIED: the oracle fails where it must, and passes where it must.
 
 Exit `0` verified, `1` broken task, `2` unverified — a control that has never been run.
 `INFO` never condemns a task: a runner that fails on an empty suite is a *good* runner,
-because that is what stops a vacuous suite from counting as a pass, so a red start is
-expected for a task whose suite begins empty. The keeper knows which case it is; the
-tool refuses to guess.
+because that is what stops a vacuous suite from counting as a pass. The keeper knows which
+case it is; the tool refuses to guess.
 
-The GREEN control needs a tree where the task is already solved. Put it in
-`fixed_tree = "fixed"` in `task.toml`, or pass `--fixed PATH`. It lives beside the
-oracle, outside `tree/`, so it is never copied into a run.
-
-## A run cannot hand back a red tree
-
-Test-first asks whether a test was seen to fail before the code was written. This asks a
-different question: is the thing green? If the last `run_tests` the arm ran exited
-non-zero, the submit is refused once, with the reason, in **every** mode — enforced,
-requested or reversed. It is not a test-first rule, so it is not conditional on the
-test-first mode.
-
-`--allow-red-submit` turns it off. That is the switch between *get the best code out of
-this model* and *measure what this model actually does when nobody stops it*.
+This check earns its keep. It caught its own author: an early fixture ran `grep` and then
+`echo`, so the script's exit status was `echo`'s and the oracle passed on everything.
+`verify-task` said *"it passes on the tree the agent starts from, so it grades nothing."*
 
 ## Told, and blocked, are two different things
 
-`enforce` ships two changes at once: the model is **told** that test-first is enforced,
-and writes into the source tree are **blocked** until a failing test has been seen. A
-comparison against `request` therefore cannot say which of the two did the work — and
-in the first eighteen-arm batch the gate never fired once, while the behaviour changed
-anyway.
+`enforce` ships two changes at once: the model is **told** that test-first is enforced, and
+source writes are **blocked** until a failing test has been seen. Comparing it against a run
+that neither tells nor blocks cannot say which of the two did the work — and in the first
+eighteen-arm batch the gate never fired once, while the behaviour changed anyway.
 
-`--tdd` decides what the gate blocks. `--tdd-prompt` decides what the model reads. A run
-that asks for nothing is now **told**: the enforced wording ships by default, the gate
-stays loose, and `--tdd enforce` is what adds refusal on top of it. Over six arms a cell,
-that is red-first 6/6 at $0.0140 against 2/6 at $0.0245 for the same loose gate carrying
-no wording — and the gate itself never fired in either cell, so the wording was the whole
-intervention. `off` still means silent, and `reverse` keeps its own block, because the
-enforced text describes the opposite sequence.
+So the two axes were separated: `--tdd` decides what the gate blocks, `--tdd-prompt`
+decides what the model reads. Six arms a cell, two tasks, oracle judged by hand:
 
-Set the two axes apart by hand when you are measuring rather than working:
+| cell | red-first | steps | $/arm | refusals | bypasses |
+|---|---|---|---|---|---|
+| neither (not told, no gate) | 2/6 | 19.5 | 0.0245 | 0 | 0 |
+| **told only** | **6/6** | **16.7** | **0.0140** | 0 | 0 |
+| **both** (shipped default) | **6/6** | 18.2 | 0.0140 | 1 | 0 |
+| blocked only | 4/6 | 19.0 | 0.0189 | 5 | **2** |
+
+**The instruction did the work; blocking without telling is strictly worse.** Blocking
+alone cost more, produced fewer red-first runs, and is the only cell where a model evaded
+the rule.
+
+The consequence is now the default: a run that asks for nothing is **told**. It carries the
+enforced wording with the gate left loose, and `--tdd enforce` is what adds refusal on top.
+`off` still means silent; `reverse` keeps its own block, because the enforced text describes
+the opposite sequence and telling a reverse run that would be a lie.
+
+The honest cost of that change: it changes the conditions of every future arm, so the
+"neither" row above is historical. It was the right default for the artifact's users — an
+agent does not read your documentation, it reads your defaults.
+
+To set the axes apart by hand, when you are measuring rather than working:
 
 ```bash
-# told, not blocked
-python3 -m ninny run --task tasks/roman --tdd request --tdd-prompt enforce
-
-# blocked, not told
-python3 -m ninny run --task tasks/roman --tdd enforce --tdd-prompt request
+python3 -m ninny run --task tasks/roman --tdd request --tdd-prompt enforce   # told, not blocked
+python3 -m ninny run --task tasks/roman --tdd enforce --tdd-prompt request   # blocked, not told
 ```
 
-Both are recorded (`run.tdd_mode`, `run.tdd_prompt_mode`), so an arm can be identified
-from its own trajectory instead of from a note somebody wrote down.
-
-A real first run of the shipped example task, `deepseek/deepseek-v4.1-flash`,
-sandboxed with bubblewrap, `--tdd enforce`:
-
-```
-=== Submitted ===
-exit=Submitted  steps=9  api_calls=9  cost=$0.0021
-tokens: in=29582 out=2796
-test-first: red-first  (mode=enforce, red_step=4, first_src_step=7, refusals=0, bypasses=0)
-```
-
-`red_step=4` is the failing test it ran and read; `first_src_step=7` is when it
-first wrote the implementation. And `ninny check` on that submission:
-
-```
-ACCEPTANCE: 9 tests, 0 failed
-GATE PASSED
-```
-
-## The four actions
-
-| action | what it does |
-|---|---|
-| `bash` | run a shell command in the working tree |
-| `write_file` | write a file, creating parent directories |
-| `read_file` | read a file, optionally a line range |
-| `run_tests` | run the task's own test command and report the exit status |
-
-`write_file` exists because quoting a whole file through a shell is where models
-most often corrupt their own work — measured: one model had the right code and
-stripped the quotes out of its character literals on the way through the shell,
-turning `if (c == ',')` into `if (c == ,)`.
-
-`run_tests` exists because it makes a RED observation a **harness event** instead of
-a guess at the model's shell history. Its exit status is unambiguous, and the
-test-first record is built on exactly that.
-
-A new action is allowed when a measured failure justifies one. Extensible, never
-speculative.
+Both are recorded (`run.tdd_mode`, `run.tdd_prompt_mode`), so an arm can be identified from
+its own trajectory instead of from a note somebody wrote down.
 
 ## Test-first, as a state machine
 
 ```bash
---tdd request    # never refuse; record what happened  (the control condition)
---tdd enforce    # refuse source writes until a test has been seen to fail
+--tdd request    # never refuse; record what happened  (the loose gate, the default)
+--tdd enforce    # also refuse source writes until a test has been seen to fail
 --tdd reverse    # allow the code first; require tests before submitting
 --tdd off
 ```
@@ -204,15 +267,41 @@ Every run ends with a verdict:
 - **`no-red`** — wrote tests but never saw one fail.
 - **`no-tests`** — never wrote a test at all.
 
-`reverse` is the control that makes a comparison about **order** rather than about
-how many tests happened to get written.
+`run_tests` is a **first-class action**, which is what makes a RED observation a harness
+event rather than a guess at the model's shell history. Its exit status is unambiguous, and
+the record is built on exactly that.
 
-Enforcement is not trusted on its own. After every action the source tree is
-hashed, and any change while the run is still in the test phase is recorded as a
-bypass. A model that finds a route around the gate shows up in the trajectory
-instead of quietly winning. (That detector originally compared mtimes, which missed
-two writes inside one filesystem timestamp tick; its own test caught it, and it
-hashes content now.)
+`reverse` is the control that makes a comparison about **order** rather than about how many
+tests happened to get written.
+
+Enforcement is not trusted on its own. After every action the source tree is hashed, and
+any change while the run is still in the test phase is recorded as a bypass — so a model
+that finds a route around the gate shows up in the trajectory instead of quietly winning.
+The tree is the arbiter, not the action log: it caught both live bypasses in the dataset
+after the gate had missed them.
+
+## A run cannot hand back a red tree
+
+Test-first asks whether a test was seen to fail before the code was written. This asks a
+different question: is the thing green? If the last `run_tests` the arm ran exited
+non-zero, the submit is refused once, with the reason, in **every** mode. It is not a
+test-first rule, so it is not conditional on the test-first mode. `--allow-red-submit`
+turns it off — the switch between *get the best code out of this model* and *measure what
+this model does when nobody stops it*.
+
+## The four actions
+
+| action | what it does |
+|---|---|
+| `bash` | run a shell command in the working tree |
+| `write_file` | write a file, creating parent directories |
+| `read_file` | read a file, optionally a line range |
+| `run_tests` | run the task's own test command and report the exit status |
+
+`write_file` exists because quoting a whole file through a shell is where models most often
+corrupt their own work — measured: one model had the right code and stripped the quotes out
+of its character literals on the way through the shell, turning `if (c == ',')` into
+`if (c == ,)`.
 
 ## A task is a directory
 
@@ -236,8 +325,8 @@ tree = "tree"
 oracle = "oracle"
 oracle_cmd = "bash oracle/gate.sh"
 
-# What run_tests runs. A non-zero exit is what counts as RED. The script fails
-# when no tests exist, so a vacuous suite cannot be mistaken for a pass.
+# What run_tests runs. A non-zero exit is what counts as RED. The script fails when no
+# tests exist, so a vacuous suite cannot be mistaken for a pass.
 test_cmd = "bash tools/run_own_tests.sh"
 
 test_globs = ["tests/own/**"]
@@ -247,13 +336,33 @@ preflight = ["python3 -V"]         # must work INSIDE the sandbox, or we don't s
 step_limit = 25
 ```
 
-**The oracle must live outside `tree/`, and Ninny refuses to load a task that gets
-this wrong.** If the agent can read the acceptance suite it can write its own tests
-from the answer key, and both "did it write tests" and "did it write them first"
-stop meaning anything. To adapt this for your own project, copy the layout above and
-point `oracle/gate.sh` at your real test suite: `ninny check` copies the submission
-into a scratch directory and runs the oracle beside it, handing you the tree in
-`$NINNY_TREE`.
+**The oracle must live outside `tree/`, and Ninny refuses to load a task that gets this
+wrong.** If the agent can read the acceptance suite it can write its own tests from the
+answer key, and both "did it write tests" and "did it write them first" stop meaning
+anything. To adapt this for your own project, copy the layout above and point
+`oracle/gate.sh` at your real test suite: `ninny check` copies the submission into a scratch
+directory, runs the oracle beside it, and hands it the tree in `$NINNY_TREE`.
+
+### The format is not Python-shaped
+
+The only task shipped here is `tasks/roman`, because **a benchmark whose answer key is
+public is not a benchmark**: the two harder tasks used for the measurements in this README
+(and the C++ arenas behind them) are deliberately not published, answer keys least of all.
+`tasks/roman` does ship with its answer key (`fixed/`), because it is an example rather than
+a benchmark — nobody should score a model on it and expect to learn anything.
+
+The same format does run other languages and other test runners. A C++ task — a cron
+expression parser with bitmask semantics, frozen headers, graded by 122 acceptance checks
+compiled with `-Wall -Wextra -Wpedantic -Werror` — was ported to this layout, passed
+`verify-task` on the first try, and was then solved by `deepseek/deepseek-v4.1-flash` at a
+40-step limit for **$0.0614** with a clean `ACCEPTANCE: 122 checked, 0 failed`. Nothing in
+the harness needed to know it was C++: the task brought its own test command, its own
+preflight and its own oracle.
+
+That run also produced the example that justifies the next change (see
+[Known limits](#known-limits)): of its three observed reds, one was `cc1plus: fatal error:
+src/*.cpp: No such file or directory` — a build error, where nothing ran at all — and two
+were real assertion failures. Ninny recorded the build error as the RED.
 
 ## Sandboxing
 
@@ -263,32 +372,33 @@ into a scratch directory and runs the oracle beside it, handing you the tree in
 --bwrap-path PATH  # a bwrap binary that is not on PATH
 ```
 
-With `bwrap`, the agent cannot see your home directory, and cannot see the oracle
-you keep beside the task — which is what makes the test-first record attributable.
-bubblewrap is Linux-only, so it is never a hard requirement; `none` is the fallback
-and the run says so out loud.
+With `bwrap`, the agent cannot see your home directory, and cannot see the oracle you keep
+beside the task — which is what makes the test-first record attributable. In a live run the
+model went looking (`ls -la ..`, `find … -iname '*cron*'`) and found exactly one directory
+chain: its own tree. bubblewrap is Linux-only, so it is never a hard requirement; `none` is
+the fallback and the run says so out loud.
 
-**You do not need root or a package manager to try it** (verified on Debian 13):
+**You do not need root or a package manager to try it** (verified on Debian 13: bubblewrap
+0.12.0, a 56 KB `.deb` holding one binary and four system libraries, 3 ms of overhead per
+action, running as your own uid):
 
 ```bash
 apt-get download bubblewrap && dpkg -x bubblewrap_*.deb root
-ninny run ... --sandbox bwrap --bwrap-path ./root/usr/bin/bwrap
+python3 -m ninny run ... --sandbox bwrap --bwrap-path ./root/usr/bin/bwrap
 ```
 
-A sandbox that hides the compiler would score every model as unable to build, so
-each task declares `preflight` commands that must work **inside** the sandbox. If
-they fail, Ninny refuses to score the run rather than blame the model.
-
-Ninny also refuses to score a run in which the agent can read the oracle, unless you
-pass `--allow-oracle-visible` and accept an unattributable result.
+A sandbox that hides the compiler would score every model as unable to build, so each task
+declares `preflight` commands that must work **inside** the sandbox. If they fail, Ninny
+refuses to score the run rather than blame the model. Ninny also refuses to score a run in
+which the agent can read the oracle, unless you pass `--allow-oracle-visible` and accept an
+unattributable result.
 
 ## Honest cost
 
-Cost is computed from token usage against **the endpoint's own published prices**
-(`/models`), or a file you supply with `--price-file`. If the price is unknown,
-Ninny reports the cost as unknown rather than guessing. A bundled price table that
-silently disagrees with your provider is how an evaluation publishes numbers that
-are wrong by 2–5×.
+Cost is computed from token usage against **the endpoint's own published prices** (`/models`),
+or a file you supply with `--price-file`. If the price is unknown, Ninny reports the cost as
+unknown rather than guessing. A bundled price table that silently disagrees with your
+provider is how an evaluation publishes numbers that are wrong by 2–5×.
 
 ## Pointing it at any endpoint
 
@@ -298,29 +408,126 @@ are wrong by 2–5×.
 --wire chat|completions                 # protocol shape
 ```
 
-Two wires are implemented and tested: `chat` (`/chat/completions` with tool calls)
-and `completions` (plain text, for models that cannot emit a tool call at all —
-a real and measured failure mode). Adding a third is a path, a body builder and a
-parser. See [docs/PROVIDERS.md](docs/PROVIDERS.md).
+Two wires are implemented and tested: `chat` (`/chat/completions` with tool calls) and
+`completions` (plain text, for models that cannot emit a tool call at all — a real and
+measured failure mode; live-verified against a model that speaks it). Adding a third is a
+path, a body builder and a parser. See [docs/PROVIDERS.md](docs/PROVIDERS.md).
+
+## Known limits
+
+Written down because a harness that hides its own seams is lying to you.
+
+- **A "RED" is only "the test command exited non-zero."** A compile error, a `NameError` and
+  a real assertion failure all score the same, so a `red-first` verdict can be earned by a
+  typo in the test file — and on a C++ task the first red is usually a build error. Honest
+  as *"the suite was not green"*, weaker than *"the test had teeth"*. The fix is to record
+  **which kind** of red it was (build vs assertion), never to gate on it. The runner already
+  prints the distinction; the record does not yet carry it.
+- **The write gate classifies intent from a shell command**, so a source write through an
+  intermediary can slip past it (a heredoc, or a script written into the tree and then run).
+  Both live instances were caught by hashing the tree afterwards — which is why the tree,
+  not the action log, is the arbiter.
+- **Teeth are measured but not built in.** Sabotaging 20 stored solutions of the example
+  task took 19 seconds and every one of them caught at least five of the six seeded defects —
+  so on that task an automatic check would print "all clear" every time. It is deferred until
+  a task's own tests *are* the deliverable.
+- **Four actions cannot do a multi-file refactor.** Deliberate.
+- **`bwrap` is Linux-only.** Deliberate, and always optional.
 
 ## Testing
 
 ```bash
-python3 -m unittest discover -s tests -t .
+python3 -m unittest discover -s tests -t .    # 154 tests
 ```
 
-78 tests. The suite that matters most is `tests/test_tdd.py`, which includes the
-ways the state machine could be fooled: tests that pass are not a RED observation, a
-test file alone does not unlock the source, the instrument cannot be edited, and a
-source change that sneaks past the gate is detected.
+The suites that matter most are `tests/test_tdd.py`, which includes the ways the state
+machine could be fooled (a passing test is not a RED observation, a test file alone does not
+unlock the source, the instrument cannot be edited, a source change that sneaks past the
+gate is still detected), and `tests/test_logs.py`, which pins the properties a log has to
+have to be worth reading.
 
-## Credit
+## Why it works this way
 
-Ninny is a fork of **mini-swe-agent 2.4.6** by Kilian A. Lieret and Carlos E.
-Jimenez, and it takes from it the shape of the loop, the submit sentinel, the
-format-error repair and the trajectory format. See [NOTICE](NOTICE) for exactly
-what came from upstream and what changed. The upstream MIT notice is preserved
-verbatim in [LICENSE.md](LICENSE.md).
+The design is not taste. Each of these is a measured or published claim, and where a
+reference says something better than this README can, it is quoted.
 
-Ninny is not mini-swe-agent, and must never be described as such — the MIT licence
-grants no trademark rights.
+**On enforcing process rather than asking for it.** Kent Beck, in *Augmented Coding:
+Beyond the Vibes* (25 June 2025), draws the line this project sits on:
+
+> In vibe coding you don't care about the code, just the behavior of the system. In
+> augmented coding you care about the code, its complexity, the tests, & their coverage.
+
+And he lists what to watch for when the model drifts, which is precisely what this harness
+records rather than trusts:
+
+> 1. Loops. 2. Functionality I hadn't asked for (even if it was a reasonable next step).
+> 3. Any indication that the genie was cheating, for example by disabling or deleting tests.
+
+Ninny's bypass detector and red-tree rule exist because that third one happened here, live:
+one arm manufactured a throwaway failing test to satisfy the letter of the rule, and two
+wrote around a write-gate that was watching the wrong thing.
+
+**On what a good test is.** Beck's *Test Desiderata* names the property the teeth probe
+measures, in his words:
+
+> **Behavioral** — tests should be sensitive to changes in the behavior of the code under
+> test. If the behavior changes, the test result should change.
+
+A suite where `to_roman(4)` returns `"IIII"` and nothing complains is not behavioral, and
+no amount of "did you write it first" makes it so. That is why the two questions are kept
+separate: the order is one measurement, the artifact is another.
+
+**On not optimising the wrong number.** Inozemtseva & Holmes, *Coverage Is Not Strongly
+Correlated with Test Suite Effectiveness* (ICSE 2014), across 31,000 test suites on five
+systems up to 724,000 lines, found a *low to moderate* correlation between coverage and
+effectiveness once suite size is controlled for, concluding that coverage **"should not be
+used as a quality target"**, and that the number of test *methods* correlates with
+effectiveness rather better. So Ninny counts what it can observe (a red was seen, at which
+step, by which action) and refuses to score a percentage.
+
+**On invented sabotage.** Mutating a program to see whether its tests notice is not a trick
+invented here: it goes back to DeMillo, Lipton & Sayward, *Hints on Test Data Selection:
+Help for the Practicing Programmer* (*Computer*, April 1978), and the state of the art is
+summarised in Jia & Harman's survey (*IEEE TSE*, 2011). At industrial scale, Google
+reports **400,000 mutants evaluated per month, about 80% of them productive** (Petrović et
+al., *An Industrial Application of Mutation Testing*, ICST 2018), and describes running the
+technique incrementally on changed code in review across **two billion lines of code and
+over 500 million tests executed daily**, evaluated with 24,000+ developers on 1,000+
+projects (Petrović et al., *Practical Mutation Testing at Scale*, arXiv:2102.11378).
+
+The lesson taken from that literature is about *tooling*, not principle. Mutation is a
+language-agnostic idea and a language-specific tool (mutmut, cosmic-ray, PIT, Stryker,
+cargo-mutants, mull) — and a mutant must still compile, which in C++ means a generic
+operator generates mostly build errors. Hand-picked sabotage per task beats an automatic
+operator, which is why the probe here was 20 seconds of work rather than a subsystem.
+
+**On measuring your own instruments.** Seven bugs were found in this project, and **all
+seven were in the measurement code** — the part that decides what the numbers mean. Three
+would have published false numbers. Not one was found by the harness. They were found by
+running both-direction controls on every oracle, running the oracle by hand, reading the
+diffs, comparing arms against each other, and replaying every stored run after every rule
+change. If you take one thing from this repository, take that ratio.
+
+## References
+
+- mini-swe-agent 2.4.6 — <https://github.com/SWE-agent/mini-swe-agent> (MIT, Kilian A.
+  Lieret and Carlos E. Jimenez); the root of this project.
+- Kent Beck, *Augmented Coding: Beyond the Vibes*, Tidy First?, 25 June 2025 —
+  <https://tidyfirst.substack.com/p/augmented-coding-beyond-the-vibes>
+- Kent Beck, *Test Desiderata* — <https://kentbeck.github.io/TestDesiderata/>
+- R. A. DeMillo, R. J. Lipton, F. G. Sayward, *Hints on Test Data Selection: Help for the
+  Practicing Programmer*, Computer 11(4):34–41, April 1978 — doi:10.1109/C-M.1978.218136
+- Y. Jia, M. Harman, *An Analysis and Survey of the Development of Mutation Testing*,
+  IEEE TSE 37(5):649–678, 2011 — doi:10.1109/TSE.2010.62
+- G. Petrović et al., *An Industrial Application of Mutation Testing: Lessons, Challenges,
+  and Research Directions*, ICST 2018
+- G. Petrović, M. Ivanković et al., *Practical Mutation Testing at Scale: A View from
+  Google*, arXiv:2102.11378
+- L. Inozemtseva, R. Holmes, *Coverage Is Not Strongly Correlated with Test Suite
+  Effectiveness*, ICSE 2014
+
+## Licence
+
+MIT. Ninny's own notice and the upstream notice it inherits are both in
+[LICENSE.md](LICENSE.md); [NOTICE](NOTICE) records the provenance. Ninny is not
+mini-swe-agent, and must never be described as such.

@@ -25,6 +25,9 @@ dependencies = []
 
 [project.urls]
 Upstream = "https://github.com/SWE-agent/mini-swe-agent"
+Homepage = "https://github.com/HarryPehkonen/ninny"
+Repository = "https://github.com/HarryPehkonen/ninny"
+Issues = "https://github.com/HarryPehkonen/ninny/issues"
 
 [project.scripts]
 ninny = "ninny.cli:main"
