@@ -154,7 +154,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         model=args.model,
         exit_status=result.exit_status,
         steps=result.steps,
-        cost_usd=result.cost_usd,
+        cost_usd=result.cost,
         verdict=(result.tdd or {}).get("verdict") if isinstance(result.tdd, dict) else None,
         run_dir=run_dir,
     )
