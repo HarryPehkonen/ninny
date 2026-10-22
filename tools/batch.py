@@ -108,6 +108,10 @@ def main(argv=None) -> int:
     ap.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
     ap.add_argument("--sandbox", default="bwrap", choices=["none", "bwrap"])
     ap.add_argument("--bwrap-path")
+    ap.add_argument("--wire", choices=["chat", "completions"],
+                    help="provider wire; omit for the client's default")
+    ap.add_argument("--tdd-prompt", choices=["off", "request", "enforce", "reverse"], default="",
+                    help="the Testing block the model READS, when it should differ from --modes")
     ap.add_argument("--prefix", default="ds41")
     ap.add_argument("--steps", type=int, help="override the task's own step limit")
     ap.add_argument("--out", help="TSV path (default: runs/batch-<stamp>.tsv)")
@@ -150,6 +154,10 @@ def main(argv=None) -> int:
                        "--name", arm]
                 if args.bwrap_path:
                     cmd += ["--bwrap-path", args.bwrap_path]
+                if args.wire:
+                    cmd += ["--wire", args.wire]
+                if args.tdd_prompt:
+                    cmd += ["--tdd-prompt", args.tdd_prompt]
                 if args.steps:
                     cmd += ["--steps", str(args.steps)]
                 if args.dry_run:

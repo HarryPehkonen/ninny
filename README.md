@@ -112,6 +112,29 @@ test-first mode.
 `--allow-red-submit` turns it off. That is the switch between *get the best code out of
 this model* and *measure what this model actually does when nobody stops it*.
 
+## Told, and blocked, are two different things
+
+`enforce` ships two changes at once: the model is **told** that test-first is enforced,
+and writes into the source tree are **blocked** until a failing test has been seen. A
+comparison against `request` therefore cannot say which of the two did the work — and
+in the first eighteen-arm batch the gate never fired once, while the behaviour changed
+anyway.
+
+`--tdd` decides what the gate blocks. `--tdd-prompt` decides what the model reads. They
+default to the same value, so nothing that ran before this existed changes behaviour.
+Set apart, they are the experiment:
+
+```bash
+# told, not blocked
+python3 -m ninny run --task tasks/roman --tdd request --tdd-prompt enforce
+
+# blocked, not told
+python3 -m ninny run --task tasks/roman --tdd enforce --tdd-prompt request
+```
+
+Both are recorded (`run.tdd_mode`, `run.tdd_prompt_mode`), so an arm can be identified
+from its own trajectory instead of from a note somebody wrote down.
+
 A real first run of the shipped example task, `deepseek/deepseek-v4.1-flash`,
 sandboxed with bubblewrap, `--tdd enforce`:
 

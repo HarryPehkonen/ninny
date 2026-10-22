@@ -73,6 +73,7 @@ class Agent:
         wall_time_limit: int = 0,
         max_format_errors: int = 3,
         sandbox_note: str = "",
+        prompt_mode: str = "",
         log=print,
     ):
         self.client = client
@@ -86,6 +87,9 @@ class Agent:
         self.wall_time_limit = wall_time_limit
         self.max_format_errors = max_format_errors
         self.sandbox_note = sandbox_note
+        # What the model is TOLD is a different axis from what the gate BLOCKS.
+        # Empty means "same as the gate", so every existing arm keeps its behaviour.
+        self.prompt_mode = prompt_mode
         self.log = log
         self.messages: list[dict] = []
         self.steps: list[Step] = []
@@ -96,7 +100,9 @@ class Agent:
         started = time.time()
         self._started_at = started
         state = self.policy.new_state()
-        instance = render_instance(self.task, str(self.workdir), self.policy.mode, self.sandbox_note)
+        instance = render_instance(
+            self.task, str(self.workdir), self.prompt_mode or self.policy.mode, self.sandbox_note
+        )
         self.messages = [
             {"role": "system", "content": SYSTEM_TEMPLATE},
             {"role": "user", "content": instance},
@@ -229,6 +235,7 @@ class Agent:
                 "workdir": str(self.workdir),
                 "sandbox": self.env.sandbox.name,
                 "tdd_mode": self.policy.mode,
+                "tdd_prompt_mode": self.prompt_mode or self.policy.mode,
                 "require_green": self.policy.require_green,
                 "step_limit": self.step_limit,
                 # The inputs, hashed, so a finished number can be traced back to the

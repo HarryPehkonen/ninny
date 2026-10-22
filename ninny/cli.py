@@ -113,6 +113,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         step_limit=steps,
         wall_time_limit=args.wall_time,
         sandbox_note=sandbox.plan(workdir)[1],
+        prompt_mode=args.tdd_prompt,
         log=(lambda _line: None) if args.quiet else print,
     )
     result = agent.run()
@@ -394,6 +395,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="let the file tools touch paths outside the working tree")
     run.add_argument("--allow-oracle-visible", action="store_true",
                      help="run even though the agent can read the oracle (result is unattributable)")
+    run.add_argument("--tdd-prompt", choices=MODES, default="",
+                     help="which Testing block the model READS; defaults to --tdd. Setting "
+                          "it apart from --tdd is how 'told' and 'blocked' are separated")
     run.add_argument("--allow-red-submit", action="store_true",
                      help="let a run submit while its own tests are still failing")
     run.add_argument("--force", action="store_true", help="archive an existing run and rerun")

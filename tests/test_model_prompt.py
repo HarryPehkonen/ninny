@@ -148,5 +148,95 @@ class PromptTests(unittest.TestCase):
         self.assertIn("fenced block", format_error_message(Response(), "", "completions"))
 
 
+class PromptModeTests(unittest.TestCase):
+    """What the model is TOLD and what the harness BLOCKS are two axes.
+
+    `enforce` ships both at once -- a stronger instruction AND a gate that refuses
+    source writes -- so comparing it against `request` cannot say which one produced
+    the behaviour. The eighteen-arm batch came out enforce 6/6 red-first against
+    request 2/6, with ZERO test-first refusals in the enforce arms: the instruction is
+    the suspect, and this is the seam that can test it. `--tdd-prompt` sets the two
+    axes apart, and both are recorded so an arm can be identified afterwards.
+    """
+
+    class FakeClient:
+        """Enough of ModelClient to drive one step to a submit, with no network."""
+
+        model = "fake/model"
+        wire = "chat"
+
+        def __init__(self, replies):
+            self.replies = list(replies)
+
+        def complete(self, messages, tools=None):
+            return self.replies.pop(0)
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+
+        from ninny.config import Task
+
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.work = root / "tree"
+        (self.work / "src").mkdir(parents=True)
+        (self.work / "src" / "thing.py").write_text("value = 0\n")
+        (self.work / "tests" / "own").mkdir(parents=True)
+        self.task = Task(
+            root=root, name="tiny", spec="Make thing.py hold 1.\n", tree_src=self.work,
+            oracle_dir=None, test_cmd="true", oracle_cmd=None,
+            test_globs=["tests/own/**"], src_globs=["src/**"], protected_globs=["tools/**"],
+            preflight=[], step_limit=5, timeout_s=5, test_timeout_s=5,
+        )
+        self.run_dir = root / "run"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def drive(self, gate_mode: str, prompt_mode: str):
+        """One step that submits, so the whole loop runs offline and ends cleanly."""
+        from ninny.agent import Agent
+        from ninny.env import Environment
+        from ninny.model import Response, ToolCall
+        from ninny.sandbox import build_sandbox
+        from ninny.tdd import TDDPolicy
+
+        submit = Response(
+            tool_calls=[ToolCall(name="bash", arguments={"command": f"echo {SUBMIT_SENTINEL}"}, id="1")]
+        )
+        agent = Agent(
+            client=self.FakeClient([submit]),
+            environment=Environment(self.work, build_sandbox("none"), timeout=5,
+                                    test_cmd="true", test_timeout=5),
+            policy=TDDPolicy(gate_mode, self.task, self.work),
+            task=self.task, workdir=self.work, run_dir=self.run_dir,
+            pricing=None, step_limit=1, log=lambda _line: None,
+            prompt_mode=prompt_mode,
+        )
+        agent.run()
+        return agent
+
+    def test_a_run_can_be_told_to_enforce_without_being_blocked(self):
+        agent = self.drive(gate_mode="request", prompt_mode="enforce")
+        self.assertIn("ENFORCED", agent.messages[1]["content"])
+        self.assertEqual(agent.policy.mode, "request")
+
+    def test_a_run_can_be_blocked_without_being_told(self):
+        agent = self.drive(gate_mode="enforce", prompt_mode="request")
+        self.assertNotIn("ENFORCED", agent.messages[1]["content"])
+        self.assertEqual(agent.policy.mode, "enforce")
+
+    def test_the_prompt_mode_falls_back_to_the_gate_mode(self):
+        agent = self.drive(gate_mode="enforce", prompt_mode="")
+        self.assertIn("ENFORCED", agent.messages[1]["content"])
+
+    def test_both_axes_are_recorded_so_the_arm_can_be_identified_later(self):
+        self.drive(gate_mode="request", prompt_mode="enforce")
+        run = json.loads((self.run_dir / "trajectory.json").read_text())["run"]
+        self.assertEqual(run["tdd_mode"], "request")
+        self.assertEqual(run["tdd_prompt_mode"], "enforce")
+
+
 if __name__ == "__main__":
     unittest.main()
