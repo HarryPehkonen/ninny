@@ -392,6 +392,14 @@ were real assertion failures. Ninny banked the build error as the RED and report
 no longer an observation, and the first test that really ran came after the first source
 write.
 
+A re-run under the contract is the cleaner example, and it exposes the next limit above:
+`Submitted` in 28 steps for $0.0394, oracle **`ACCEPTANCE: 122 checked, 0 failed`** by hand,
+and a recorded `test_runs` of `[[5,2],[7,1],[9,1],[11,0],[15,0]]`. It wrote its suite, then a
+**482-byte stub** into `src/`, could not compile (2), fixed that, ran the suite and watched it
+fail (1), then wrote the real implementation and went green. Test-first in substance, and the
+verdict still reads `red-after-code`, because the stub is a file under `src/` and it landed one
+step before the red.
+
 ## Sandboxing
 
 ```bash
@@ -455,6 +463,15 @@ Written down because a harness that hides its own seams is lying to you.
   kinds of failure keeps the old weakness, and the harness cannot see that from the outside —
   a red is worth exactly as much as the task it came from. **What a red still does not mean
   is that the test had teeth**: see the next limit.
+- **Order is a Python-shaped question.** `red_step < first_src_step` asks whether a test failed
+  before the first source write, and on a compiled task nothing can fail until the sources
+  compile, so the model must put *something* in `src/` first -- exactly what the C++ task's own
+  failure message recommends ("the fix is a stub"). Both C++ arms recorded here wrote a stub
+  and were reported `red-after-code` for it. The answer is not a stub detector; it is to read
+  `test_runs` and the diff, of which the verdict is only a summary. That arm's sequence --
+  `[[5,2],[7,1],[9,1],[11,0],[15,0]]` -- reads as textbook test-first, and no one-word verdict
+  could carry it. **A verdict is a summary for Python-shaped tasks; the record is the evidence
+  everywhere.**
 - **The write gate classifies intent from a shell command**, so a source write through an
   intermediary can slip past it (a heredoc, or a script written into the tree and then run).
   Both live instances were caught by hashing the tree afterwards — which is why the tree,
