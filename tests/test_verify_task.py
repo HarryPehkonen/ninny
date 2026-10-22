@@ -9,9 +9,11 @@ known-good tree that MUST pass.
 `verify-task` refuses to call a task trustworthy until both directions are observed.
 """
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from ninny import cli
 
@@ -61,6 +63,13 @@ class VerifyTaskTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name) / "task"
         self.root.mkdir()
+        # This drives the real CLI, and the real CLI now writes a log. Keep those out of the
+        # user's state directory: a test run is not something Ninny did.
+        self._env = mock.patch.dict(
+            os.environ, {"NINNY_LOG_DIR": str(Path(self._tmp.name) / "logs")}
+        )
+        self._env.start()
+        self.addCleanup(self._env.stop)
 
     def tearDown(self):
         self._tmp.cleanup()

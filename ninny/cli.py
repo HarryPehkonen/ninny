@@ -23,7 +23,7 @@ import sys
 import time
 from pathlib import Path
 
-from ninny import UPSTREAM, UPSTREAM_URL, __version__
+from ninny import UPSTREAM, UPSTREAM_URL, __version__, logs
 from ninny.agent import Agent
 from ninny.artifacts import write_diff
 from ninny.config import ConfigError, load_task
@@ -57,6 +57,7 @@ def resolve_prompt_mode(tdd: str, prompt: str) -> str:
 def cmd_run(args: argparse.Namespace) -> int:
     task = load_task(args.task)
     base_url, api_key, wire = resolve_endpoint(args)
+    logs.register_secret(api_key)  # the process holding the key writes the log
     pricing = Pricing(base_url, api_key, price_file=args.price_file, fetch=not args.no_price_fetch)
     steps = args.steps or task.step_limit
 
@@ -144,8 +145,19 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"  diff:       {diff_stat}")
     print(f"  trajectory: {run_dir / 'trajectory.md'}")
     print(f"  patch:      {run_dir / 'diff.patch'}")
+    print(f"  log:        {_log_path()}")
     print()
     print(f"next, BY HAND: ninny check --task {task.root} --tree {workdir}")
+    _record(
+        args,
+        task=task.name,
+        model=args.model,
+        exit_status=result.exit_status,
+        steps=result.steps,
+        cost_usd=result.cost_usd,
+        verdict=(result.tdd or {}).get("verdict") if isinstance(result.tdd, dict) else None,
+        run_dir=run_dir,
+    )
     return 0 if result.exit_status == "Submitted" else 1
 
 
@@ -214,6 +226,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     code, output = _run_oracle(task, work)
     print(output.rstrip())
     print(f"\nexit {code}   log: {work / 'oracle.log'}")
+    _record(args, task=task.name, verdict=_last_line(output))
     return code
 
 
@@ -290,11 +303,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     failed = [c for c in checks if c[0] == "FAIL"]
     if failed:
+        _record(args, task=task.name, verdict="BROKEN TASK")
         print(f"BROKEN TASK: {failed[0][1]}")
         return 1
     if any(c[0] == "SKIP" for c in checks):
+        _record(args, task=task.name, verdict="UNVERIFIED")
         print("UNVERIFIED: not every control has been run, so this task is not trusted yet.")
         return 2
+    _record(args, task=task.name, verdict="VERIFIED")
     print("VERIFIED: the oracle fails where it must, and passes where it must.")
     return 0
 
@@ -381,6 +397,36 @@ def _third_party_imports() -> list[str]:
     return sorted(found)
 
 
+def _log_path() -> str:
+    """Where this invocation's transcript is going, for the reader who has to find it."""
+    session_log = logs.current()
+    return str(session_log.path) if session_log is not None and session_log.path else "(no log)"
+
+
+def _last_line(text: str) -> str:
+    """The oracle's own last word -- its verdict, not a summary of ours."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return lines[-1][:80] if lines else ""
+
+
+def _log_name(args) -> str:
+    """What to call this invocation in the log file name."""
+    named = getattr(args, "name", None) or getattr(args, "task", None) or ""
+    return Path(named).expanduser().name if named else ""
+
+
+def _record(args, **fields: object) -> None:
+    """Hand facts to `main`, which writes the one history line for this invocation.
+
+    The write lives in one place on purpose. A run that dies in the middle still gets its
+    line, because the line is written by the code that did not die -- otherwise the index
+    would be a list of the runs that succeeded, which is exactly backwards.
+    """
+    current = dict(getattr(args, "_record", None) or {})
+    current.update({key: value for key, value in fields.items() if value is not None})
+    args._record = current
+
+
 # -------------------------------------------------------------------- argparse
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ninny", description="a tiny coding-agent harness")
@@ -447,16 +493,35 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--bwrap-path")
     doctor.add_argument("--out")
     doctor.set_defaults(func=cmd_doctor)
+
+    # One flag on every subcommand, spelled once. A harness that writes into your home
+    # directory had better have an off switch.
+    for subparser in (run, check, verify, doctor):
+        subparser.add_argument("--no-log", action="store_true",
+                               help="no transcript log and no history line for this invocation")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    """One invocation: a transcript, and one line in the index.
+
+    The log wraps the whole command, the failure paths included, so a run that dies still
+    leaves both. Otherwise "what has Ninny been doing?" would be answerable only for the
+    runs that went right, which is exactly backwards.
+    """
     args = build_parser().parse_args(argv)
-    try:
-        return args.func(args)
-    except (ConfigError, SandboxError, ModelError) as exc:
-        print(f"ninny: {exc}", file=sys.stderr)
-        return 2
-    except KeyboardInterrupt:
-        print("ninny: interrupted", file=sys.stderr)
-        return 130
+    with logs.session(args.command, _log_name(args), enabled=not args.no_log) as session_log:
+        try:
+            code = args.func(args)
+        except (ConfigError, SandboxError, ModelError) as exc:
+            print(f"ninny: {exc}", file=sys.stderr)
+            code = 2
+        except KeyboardInterrupt:
+            print("ninny: interrupted", file=sys.stderr)
+            code = 130
+    if not args.no_log:
+        fields = dict(getattr(args, "_record", None) or {})
+        fields.setdefault("exit_status", code)
+        fields["log_file"] = session_log.path
+        logs.record(args.command, **fields)
+    return code
