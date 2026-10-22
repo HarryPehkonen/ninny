@@ -41,6 +41,12 @@ class TDDState:
     refusals: list[list] = field(default_factory=list)
     bypass_detected: list[list] = field(default_factory=list)
     submit_refusals: int = 0
+    red_submit_refusals: int = 0
+
+    @property
+    def own_gate_red(self) -> bool:
+        """The arm's own test command was last seen failing."""
+        return bool(self.test_runs) and self.test_runs[-1][1] != 0
 
     @property
     def red_ok(self) -> bool:
@@ -75,6 +81,8 @@ class TDDState:
             "refusals": self.refusals,
             "bypass_detected": self.bypass_detected,
             "submit_refusals": self.submit_refusals,
+            "red_submit_refusals": self.red_submit_refusals,
+            "own_gate_red": self.own_gate_red,
         }
 
 
@@ -100,12 +108,13 @@ def snapshot(workdir: Path, globs: list[str]) -> dict[str, str]:
 
 
 class TDDPolicy:
-    def __init__(self, mode: str, task, workdir: str | Path):
+    def __init__(self, mode: str, task, workdir: str | Path, require_green: bool = True):
         if mode not in MODES:
             raise ValueError(f"unknown tdd mode {mode!r}; expected one of {', '.join(MODES)}")
         self.mode = mode
         self.task = task
         self.workdir = Path(workdir).resolve()
+        self.require_green = require_green
         self._baseline_src = snapshot(self.workdir, task.src_globs)
 
     def new_state(self) -> TDDState:
@@ -141,6 +150,16 @@ class TDDPolicy:
         if rel and self.task.is_protected(rel):
             state.refusals.append([step, f"protected: {rel}"])
             return self._protected_message(rel)
+
+        # Handing back a tree its own tests say is broken is not a finished run, and
+        # that holds in every mode: this is not test-first, it is "is it green?".
+        # Refused once and then let through, like the no-RED submit rule, so a run
+        # cannot be trapped in a loop it cannot win.
+        if action.is_submit() and self.require_green and state.own_gate_red:
+            state.red_submit_refusals += 1
+            if state.red_submit_refusals <= 1:
+                state.refusals.append([step, "submit on a red tree"])
+                return self._red_tree_message()
 
         if self.mode != "enforce":
             return ""
@@ -184,6 +203,13 @@ class TDDPolicy:
                     f"{', '.join(self.task.test_globs)}, run them with run_tests, then submit."
                 )
         return ""
+
+    def _red_tree_message(self) -> str:
+        return (
+            "Refused: your own tests are failing -- the last run_tests run exited non-zero -- "
+            "so this is not finished. Fix the code or the test, run it again with run_tests, "
+            "and submit when it is green. A handover on a red tree is not a result."
+        )
 
     def _protected_message(self, rel: str) -> str:
         return (

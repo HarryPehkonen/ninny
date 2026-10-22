@@ -39,6 +39,9 @@ it dropped all of that.
 git clone https://github.com/HarryPehkonen/ninny
 cd ninny
 
+# 0. prove the task grades the way it must, before spending anything on it
+python3 -m ninny verify-task --task tasks/roman
+
 # 1. see what this machine can do
 python3 -m ninny doctor
 
@@ -54,6 +57,60 @@ python3 -m ninny check --task tasks/roman --tree runs/roman/<arm>/tree
 ```
 
 Step 2 prints a record; step 3 is the verdict, and it is run by hand, per run.
+
+## Every run leaves three artifacts
+
+A number you cannot re-derive is a rumour. Each run writes:
+
+- `trajectory.json` / `trajectory.md` — the record: every step, every refusal, the
+  verdict, the cost, and hashes of the spec and starting tree it came from
+- `diff.patch` — what the run actually changed, against the tree it started from
+- `oracle.log` — written by `check`: the verdict and the output it came from
+
+When a result is reported, all three paths are named.
+
+`diff.patch` is not decoration. "What did it change?" was being answered by diffing two
+directories by hand, and that is how the last real bug in this project was found: a
+model edited `ninny/tdd.py` through a shell heredoc, and the record — which watched
+`write_file` — said no source file had ever been touched. A second opinion on the same
+question is what caught it.
+
+## `verify-task`: a task is not trusted until it has been proved
+
+An oracle that passes on the tree the agent starts from grades nothing. An oracle that
+fails on a solved tree makes the task unsolvable. Both directions, or neither:
+
+```
+$ python3 -m ninny verify-task --task tasks/roman
+ninny verify-task: roman  (.../tasks/roman)
+
+  INFO  own test command fails on the tree the agent starts from   (exit 1 -- expected when the suite starts empty and the runner fails on an empty suite; ...)
+  PASS  oracle is RED on the given tree   (exit 1)
+  PASS  oracle is GREEN on the fixed tree   (exit 0)
+
+VERIFIED: the oracle fails where it must, and passes where it must.
+```
+
+Exit `0` verified, `1` broken task, `2` unverified — a control that has never been run.
+`INFO` never condemns a task: a runner that fails on an empty suite is a *good* runner,
+because that is what stops a vacuous suite from counting as a pass, so a red start is
+expected for a task whose suite begins empty. The keeper knows which case it is; the
+tool refuses to guess.
+
+The GREEN control needs a tree where the task is already solved. Put it in
+`fixed_tree = "fixed"` in `task.toml`, or pass `--fixed PATH`. It lives beside the
+oracle, outside `tree/`, so it is never copied into a run.
+
+## A run cannot hand back a red tree
+
+Test-first asks whether a test was seen to fail before the code was written. This asks a
+different question: is the thing green? If the last `run_tests` the arm ran exited
+non-zero, the submit is refused once, with the reason, in **every** mode — enforced,
+requested or reversed. It is not a test-first rule, so it is not conditional on the
+test-first mode.
+
+`--allow-red-submit` turns it off. That is the switch between *get the best code out of
+this model* and *measure what this model actually does when nobody stops it*.
 
 A real first run of the shipped example task, `deepseek/deepseek-v4.1-flash`,
 sandboxed with bubblewrap, `--tdd enforce`:

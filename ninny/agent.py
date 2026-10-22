@@ -9,6 +9,7 @@ confinement, and a cost that is either real or admitted to be unknown.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from pathlib import Path
 
 from ninny import SUBMIT_SENTINEL, UPSTREAM, UPSTREAM_URL, __version__
 from ninny.actions import TOOLS, parse_reply, validate
+from ninny.artifacts import tree_digest
 from ninny.prompt import SYSTEM_TEMPLATE, format_error_message, render_instance
 
 
@@ -223,10 +225,18 @@ class Agent:
                 "model": result.model,
                 "wire": result.wire,
                 "task": self.task.name,
+                "task_root": str(self.task.root),
                 "workdir": str(self.workdir),
                 "sandbox": self.env.sandbox.name,
                 "tdd_mode": self.policy.mode,
+                "require_green": self.policy.require_green,
                 "step_limit": self.step_limit,
+                # The inputs, hashed, so a finished number can be traced back to the
+                # exact spec and starting tree it came from.
+                "spec_sha256": hashlib.sha256(self.task.spec.encode()).hexdigest()[:16],
+                "tree_sha256": tree_digest(self.task.tree_src),
+                "test_cmd": self.task.test_cmd,
+                "oracle_cmd": self.task.oracle_cmd,
                 "started": _ts(self._started_at),
                 "finished": _ts(time.time()),
             },

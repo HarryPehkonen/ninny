@@ -310,6 +310,60 @@ class RedObservationTests(TDDBase):
         self.assertEqual(state.verdict(), "red-first")
 
 
+class GreenTreeRuleTests(TDDBase):
+    """A run must not hand back a tree its own tests say is broken.
+
+    Test-first asks whether a test was seen to fail before the code. This asks a
+    different and simpler question: is the thing being handed back actually green?
+    A run that submits on a red suite has not finished, whatever it wrote.
+    """
+
+    def test_submitting_with_the_own_tests_failing_is_refused(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=2)
+        refusal = policy.gate(self.submit(), state, 3)
+        self.assertTrue(refusal)
+        self.assertIn("failing", refusal.lower())
+
+    def test_submitting_once_the_tests_go_green_is_allowed(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=2)
+        self.apply(policy, state, self.write("src/thing.py"), step=3)
+        self.apply(policy, state, self.run_tests(), exit_code=0, step=4)
+        self.assertEqual(policy.gate(self.submit(), state, 5), "")
+
+    def test_a_run_that_never_ran_its_tests_is_not_accused_of_a_red_tree(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.assertEqual(policy.gate(self.submit(), state, 2), "")
+
+    def test_the_refusal_is_not_a_trap(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=1)
+        self.assertTrue(policy.gate(self.submit(), state, 2))
+        self.assertEqual(policy.gate(self.submit(), state, 3), "")
+
+    def test_the_red_tree_is_visible_in_the_record(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=1)
+        self.assertTrue(state.as_dict()["own_gate_red"])
+        policy.gate(self.submit(), state, 2)
+        self.assertIn("red tree", " ".join(str(r) for r in state.refusals))
+
+    def test_a_task_can_turn_the_rule_off(self):
+        policy = TDDPolicy("request", self.task, self.work, require_green=False)
+        state = policy.new_state()
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=1)
+        self.assertEqual(policy.gate(self.submit(), state, 2), "")
+
+
 class VerdictTests(TDDBase):
     def test_no_tests_at_all(self):
         policy = self.policy_for("request")

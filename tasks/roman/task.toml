@@ -2,6 +2,11 @@ name = "roman"
 spec_file = "SPEC.md"
 tree = "tree"
 
+# A tree in which this task is already solved, used ONLY by `ninny verify-task` to
+# prove the oracle can pass. It lives beside the oracle, outside tree/, so it is
+# never copied into a run.
+fixed_tree = "fixed"
+
 # The acceptance suite lives HERE, never inside tree/. If the agent could read it
 # it could write its own tests from the answer key, and "did it write tests" and
 # "did it write them first" would both stop meaning anything.

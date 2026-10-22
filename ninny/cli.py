@@ -1,12 +1,14 @@
 """The command line.
 
-    ninny run    --task TASK --model MODEL [options]   one model, one task
-    ninny check  --task TASK --tree TREE               run the oracle, outside the tree
-    ninny doctor                                       what this machine can do
+    ninny run         --task TASK --model MODEL [options]   one model, one task
+    ninny check       --task TASK --tree TREE               run the oracle, outside the tree
+    ninny verify-task --task TASK [--fixed TREE]            prove the task grades correctly
+    ninny doctor                                            what this machine can do
 
 Nothing here runs the oracle as part of a run. Deciding whether a submission is
 correct is the keeper's job and is done by hand, per run: an evaluation whose
-harness grades its own subject is not an evaluation.
+harness grades its own subject is not an evaluation. `verify-task` is the keeper
+checking the *task*, deliberately, before any money is spent on it.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from pathlib import Path
 
 from ninny import UPSTREAM, UPSTREAM_URL, __version__
 from ninny.agent import Agent
+from ninny.artifacts import write_diff
 from ninny.config import ConfigError, load_task
 from ninny.env import Environment
 from ninny.model import PROVIDERS, ModelClient, ModelError
@@ -81,7 +84,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         test_timeout=task.test_timeout_s,
         allow_outside=args.allow_outside,
     )
-    policy = TDDPolicy(args.tdd, task, workdir)
+    policy = TDDPolicy(args.tdd, task, workdir, require_green=not args.allow_red_submit)
     client = ModelClient(
         model=args.model,
         base_url=base_url,
@@ -113,14 +116,65 @@ def cmd_run(args: argparse.Namespace) -> int:
         log=(lambda _line: None) if args.quiet else print,
     )
     result = agent.run()
+    diff_stat = write_diff(task.tree_src, workdir, run_dir / "diff.patch")
 
     print()
     print(f"=== {result.exit_status} ===")
     print(result.summary())
+    print(f"  diff:       {diff_stat}")
     print(f"  trajectory: {run_dir / 'trajectory.md'}")
+    print(f"  patch:      {run_dir / 'diff.patch'}")
     print()
     print(f"next, BY HAND: ninny check --task {task.root} --tree {workdir}")
     return 0 if result.exit_status == "Submitted" else 1
+
+
+# -------------------------------------------------------------------- staging
+def _stage(task, tree: Path, base: Path, label: str = "") -> Path:
+    """A submission and the oracle, side by side, outside the submission.
+
+    Absolute paths throughout: NINNY_TREE is handed to the oracle, which runs with
+    cwd inside the staging directory, so a relative path would resolve against the
+    wrong place and the oracle would grade a directory that is not there. That bug
+    produced a confident pass that meant nothing, which is why it is spelled out.
+    """
+    stamp = time.strftime("%Y%m%d-%H%M%S") + (f"-{label}" if label else "")
+    work = (base / stamp).resolve()
+    index = 1
+    while work.exists():  # two checks in the same second must not collide
+        work = (base / f"{stamp}-{index}").resolve()
+        index += 1
+    work.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(tree, work / "tree", symlinks=True)
+    if task.oracle_dir is not None:
+        shutil.copytree(task.oracle_dir, work / "oracle", symlinks=True)
+    return work
+
+
+def _run_oracle(task, work: Path) -> tuple[int, str]:
+    env = dict(os.environ)
+    env["NINNY_TREE"] = str(work / "tree")
+    env["NINNY_ORACLE"] = str(work / "oracle")
+    completed = subprocess.run(task.oracle_cmd, shell=True, cwd=str(work), env=env,
+                               capture_output=True, text=True)
+    output = (completed.stdout or "") + (completed.stderr or "")
+    (work / "oracle.log").write_text(output)
+    return completed.returncode, output
+
+
+def _run_own_suite(task, work: Path) -> tuple[int, str]:
+    """The task's own test command, in a staged tree, with no sandbox.
+
+    This is about the task, not about a model: a tree whose own suite already fails
+    sends the agent chasing pre-existing failures instead of the actual work.
+    """
+    try:
+        completed = subprocess.run(task.test_cmd, shell=True, cwd=str(work / "tree"),
+                                   capture_output=True, text=True,
+                                   timeout=max(600, task.test_timeout_s))
+    except subprocess.TimeoutExpired:
+        return 124, f"timed out after {max(600, task.test_timeout_s)}s\n"
+    return completed.returncode, (completed.stdout or "") + (completed.stderr or "")
 
 
 # ---------------------------------------------------------------------- check
@@ -134,34 +188,95 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(f"ninny: task {task.name} declares no oracle_cmd", file=sys.stderr)
         return 2
 
-    stamp = time.strftime("%Y%m%d-%H%M%S")
     base = Path(args.out).expanduser() if args.out else (Path(args.task).expanduser() / "checks")
-    # Absolute from here on: NINNY_TREE is handed to the oracle, which runs with
-    # cwd inside the staging directory, so a relative path would resolve against
-    # the wrong place and the oracle would grade a directory that isn't there.
-    work = (base / stamp).resolve()
-    index = 1
-    while work.exists():  # two checks in the same second must not collide
-        work = (base / f"{stamp}-{index}").resolve()
-        index += 1
-    work.mkdir(parents=True, exist_ok=True)
-    # The oracle runs beside a COPY of the submission, never inside it, so a
-    # checking script cannot pollute the artifact it is judging.
-    shutil.copytree(tree, work / "tree", symlinks=True)
-    if task.oracle_dir is not None:
-        shutil.copytree(task.oracle_dir, work / "oracle", symlinks=True)
-
-    env = dict(os.environ)
-    env["NINNY_TREE"] = str(work / "tree")
-    env["NINNY_ORACLE"] = str(work / "oracle")
+    work = _stage(task, tree, base)
     print(f"ninny check: {task.oracle_cmd}   (cwd={work}, NINNY_TREE={work / 'tree'})")
-    completed = subprocess.run(task.oracle_cmd, shell=True, cwd=str(work), env=env,
-                               capture_output=True, text=True)
-    output = (completed.stdout or "") + (completed.stderr or "")
-    (work / "oracle.log").write_text(output)
+    code, output = _run_oracle(task, work)
     print(output.rstrip())
-    print(f"\nexit {completed.returncode}   log: {work / 'oracle.log'}")
-    return completed.returncode
+    print(f"\nexit {code}   log: {work / 'oracle.log'}")
+    return code
+
+
+# ---------------------------------------------------------------- verify-task
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Prove a task grades the way it must, before any money is spent on it.
+
+    Both directions, because either one alone is a trap. An oracle that never fails
+    cannot tell you a submission is right -- it would say the task was solved by the
+    stub. An oracle that never passes cannot tell you the task is solvable at all.
+    A task that has not passed both is untrusted, and says so.
+    """
+    task = load_task(args.task)
+    base = Path(args.out).expanduser() if args.out else (Path(args.task).expanduser() / "checks")
+
+    fixed: Path | None = None
+    if args.fixed:
+        fixed = Path(args.fixed).expanduser().resolve()
+    elif task.meta.get("fixed_tree"):
+        fixed = (task.root / str(task.meta["fixed_tree"])).resolve()
+
+    print(f"ninny verify-task: {task.name}  ({task.root})")
+    checks: list[tuple[str, str, str]] = []
+
+    given = _stage(task, task.tree_src, base, "given")
+
+    code, output = _run_own_suite(task, given)
+    (given / "own-tests.log").write_text(output)
+    # Informational, never fatal. A runner that fails on an empty suite is a good
+    # runner -- that is what stops a vacuous suite from counting as a pass -- so a
+    # red start is expected for a task whose suite begins empty, and the keeper is
+    # the one who knows which case this is.
+    if code == 0:
+        checks.append(("INFO", "the tree the agent starts from is already green under its own test command", f"exit {code}"))
+    else:
+        checks.append((
+            "INFO",
+            "own test command fails on the tree the agent starts from",
+            f"exit {code} -- expected when the suite starts empty and the runner fails on an "
+            "empty suite; otherwise the agent will chase failures it did not cause",
+        ))
+
+    if not task.oracle_cmd:
+        checks.append(("FAIL", "the task declares an oracle_cmd", "no oracle_cmd in task.toml"))
+    else:
+        code, _ = _run_oracle(task, given)
+        if code != 0:
+            checks.append(("PASS", "oracle is RED on the given tree", f"exit {code}"))
+        else:
+            checks.append(
+                ("FAIL", "oracle is RED on the given tree",
+                 "exit 0 -- it passes on the tree the agent starts from, so it grades nothing")
+            )
+
+    if not task.oracle_cmd or fixed is None or not fixed.is_dir():
+        detail = ("no oracle_cmd" if not task.oracle_cmd else
+                  "no fixed tree: pass --fixed PATH, or set fixed_tree in task.toml")
+        checks.append(("SKIP", "oracle is GREEN on the fixed tree", detail))
+    else:
+        good = _stage(task, fixed, base, "fixed")
+        code, _ = _run_oracle(task, good)
+        if code == 0:
+            checks.append(("PASS", "oracle is GREEN on the fixed tree", f"exit {code}"))
+        else:
+            checks.append(
+                ("FAIL", "oracle is GREEN on the fixed tree",
+                 f"exit {code} -- it does not pass on the known-good tree, so the task may be unsolvable")
+            )
+
+    print()
+    for verdict, name, detail in checks:
+        print(f"  {verdict:4}  {name}   ({detail})")
+    print()
+
+    failed = [c for c in checks if c[0] == "FAIL"]
+    if failed:
+        print(f"BROKEN TASK: {failed[0][1]}")
+        return 1
+    if any(c[0] == "SKIP" for c in checks):
+        print("UNVERIFIED: not every control has been run, so this task is not trusted yet.")
+        return 2
+    print("VERIFIED: the oracle fails where it must, and passes where it must.")
+    return 0
 
 
 # --------------------------------------------------------------------- doctor
@@ -279,6 +394,8 @@ def build_parser() -> argparse.ArgumentParser:
                      help="let the file tools touch paths outside the working tree")
     run.add_argument("--allow-oracle-visible", action="store_true",
                      help="run even though the agent can read the oracle (result is unattributable)")
+    run.add_argument("--allow-red-submit", action="store_true",
+                     help="let a run submit while its own tests are still failing")
     run.add_argument("--force", action="store_true", help="archive an existing run and rerun")
     run.add_argument("--quiet", action="store_true")
     run.set_defaults(func=cmd_run)
@@ -288,6 +405,15 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--tree", required=True, help="the submission to judge")
     check.add_argument("--out", help="where to stage the check (default: <task>/checks)")
     check.set_defaults(func=cmd_check)
+
+    verify = sub.add_parser(
+        "verify-task",
+        help="prove a task's oracle fails where it must and passes where it must",
+    )
+    verify.add_argument("--task", required=True)
+    verify.add_argument("--fixed", help="a tree the task is known to be solvable on (the GREEN control)")
+    verify.add_argument("--out", help="where to stage the checks (default: <task>/checks)")
+    verify.set_defaults(func=cmd_verify)
 
     doctor = sub.add_parser("doctor", help="what this machine can do")
     doctor.add_argument("--provider")
