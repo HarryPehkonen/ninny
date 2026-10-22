@@ -17,8 +17,10 @@ from pathlib import Path
 # test-first gate, because they have to agree: if the gate counts a bytecode cache as
 # source, then merely RUNNING the tests looks like editing the code, `first_src_step`
 # moves to the red step, and a textbook red-first run is reported as "red-after-code".
-SKIP_PARTS = {"__pycache__", ".git", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
-SKIP_SUFFIXES = (".pyc", ".pyo")
+# The same rule covers compiler output: the C++ task's test command builds the suite into
+# build/ before it runs it, and a linked binary is not something an arm did.
+SKIP_PARTS = {"__pycache__", ".git", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build"}
+SKIP_SUFFIXES = (".pyc", ".pyo", ".o", ".obj")
 
 
 def is_ignored(path: str | Path) -> bool:

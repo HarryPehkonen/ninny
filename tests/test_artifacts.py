@@ -60,6 +60,20 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(patch.strip(), "")
         self.assertIn("0 added", stat)
 
+    def test_build_output_is_not_part_of_the_diff(self):
+        """A compiled loop writes build/own and object files. Not something an arm did.
+
+        The C++ task's own test command compiles the suite into build/ before running
+        it, so without this rule every C++ arm's diff.patch is a megabyte of compiler
+        output with the actual change buried inside it.
+        """
+        (self.after / "build").mkdir()
+        (self.after / "build" / "own").write_bytes(b"\x7fELF\x02\x01\x01")
+        (self.after / "src" / "thing.o").write_bytes(b"\x7fELF\x02\x01\x01")
+        patch, stat = tree_diff(self.before, self.after)
+        self.assertEqual(patch.strip(), "")
+        self.assertIn("0 added", stat)
+
     def test_a_binary_file_is_named_not_crashed(self):
         (self.before / "blob.bin").write_bytes(b"\xff\xfe\x00")
         (self.after / "blob.bin").write_bytes(b"\xff\xfe\x01")
@@ -105,6 +119,13 @@ class DigestTests(unittest.TestCase):
         before = tree_digest(self.tree)
         (self.tree / "src" / "__pycache__").mkdir()
         (self.tree / "src" / "__pycache__" / "x.pyc").write_bytes(b"\x00")
+        self.assertEqual(before, tree_digest(self.tree))
+
+
+    def test_build_output_does_not_move_the_digest(self):
+        before = tree_digest(self.tree)
+        (self.tree / "build").mkdir()
+        (self.tree / "build" / "own").write_bytes(b"\x7fELF")
         self.assertEqual(before, tree_digest(self.tree))
 
 
