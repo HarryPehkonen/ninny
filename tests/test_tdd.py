@@ -158,6 +158,26 @@ class BypassTests(TDDBase):
         policy.observe_tree(state, step=4)
         self.assertEqual(state.bypass_detected, [])
 
+    def test_request_mode_does_not_call_an_ungated_write_a_bypass(self):
+        """A bypass means the gate was walked around. In `request` there is no gate,
+        so calling an allowed write a bypass is a false accusation -- and this is the
+        control arm of the comparison, which must not be quietly labelled a cheater."""
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        (self.work / "src" / "thing.py").write_text("value = 3\n")
+        policy.observe_tree(state, step=2)
+        self.assertEqual(state.bypass_detected, [])
+
+    def test_request_mode_still_ends_its_test_phase_at_red(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"))
+        self.apply(policy, state, self.run_tests(), exit_code=1)
+        self.assertEqual(state.phase, "impl")
+        (self.work / "src" / "thing.py").write_text("value = 4\n")
+        policy.observe_tree(state, step=5)
+        self.assertEqual(state.bypass_detected, [])
+
 
 class ModeTests(TDDBase):
     def test_request_never_refuses_but_still_records(self):

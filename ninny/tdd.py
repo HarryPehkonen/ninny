@@ -201,20 +201,23 @@ class TDDPolicy:
             elif self.task.is_src_path(rel) and observation.ok:
                 if state.first_src_step is None:
                     state.first_src_step = step
-                if self.mode == "enforce" and state.red_ok:
+                if state.red_ok:
                     state.phase = "impl"
         elif action.name == "run_tests":
             state.test_runs.append([step, observation.exit_code if observation.exit_code is not None else -1])
             if observation.exit_code not in (0, None) and state.red_step is None:
                 state.red_step = step
-            if self.mode == "enforce" and state.red_ok:
+            if state.red_ok:
                 state.phase = "impl"
         elif action.is_submit():
             state.phase = "done"
 
     def observe_tree(self, state: TDDState, step: int) -> None:
         current = snapshot(self.workdir, self.task.src_globs)
-        if state.phase == "test":
+        # A bypass is only a bypass where the gate was supposed to refuse. In the
+        # other modes nothing was gated, so recording one would mislabel the control
+        # arm of a comparison as a run that cheated.
+        if self.mode == "enforce" and state.phase == "test":
             for path, signature in current.items():
                 if self._baseline_src.get(path) != signature:
                     entry = [step, path]
