@@ -242,6 +242,41 @@ class ModeTests(TDDBase):
         self.assertEqual(policy.gate_submit_reverse(state, 4), "")
 
 
+class RedObservationTests(TDDBase):
+    """A failing run only counts as RED if there was a test file to fail.
+
+    The own-test runner fails on purpose when there are no tests, so a model that
+    runs the test command early -- before writing anything -- would otherwise bank
+    an early `red_step` and be reported as red-first without ever having seen a test
+    fail. That is a false positive on the headline number, and it would let the
+    unenforced control arm look as good as the enforced one.
+    """
+
+    def test_a_failing_run_with_no_test_file_is_not_a_red_observation(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.run_tests(), exit_code=1)
+        self.assertIsNone(state.red_step)
+
+    def test_an_early_failure_cannot_be_reported_as_red_first(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=1)  # nothing written yet
+        self.apply(policy, state, self.write("src/thing.py"), step=2)
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=3)
+        self.assertEqual(state.verdict(), "no-red")
+        self.assertFalse(state.red_before_code)
+
+    def test_a_real_red_is_still_recorded_and_still_red_first(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=2)
+        self.assertEqual(state.red_step, 2)
+        self.apply(policy, state, self.write("src/thing.py"), step=3)
+        self.assertEqual(state.verdict(), "red-first")
+
+
 class VerdictTests(TDDBase):
     def test_no_tests_at_all(self):
         policy = self.policy_for("request")

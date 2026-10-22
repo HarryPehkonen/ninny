@@ -49,12 +49,13 @@ class TDDState:
 
     @property
     def red_before_code(self) -> bool:
-        return self.red_step is not None and (self.first_src_step is None or self.red_step < self.first_src_step)
+        """A RED was seen, and it happened before the first source write."""
+        return self.red_ok and (self.first_src_step is None or self.red_step < self.first_src_step)
 
     def verdict(self) -> str:
         if not self.test_files:
             return "no-tests"
-        if self.red_step is None:
+        if not self.red_ok:
             return "no-red"
         if self.first_src_step is None:
             return "red-no-impl"
@@ -220,7 +221,12 @@ class TDDPolicy:
                     state.phase = "impl"
         elif action.name == "run_tests":
             state.test_runs.append([step, observation.exit_code if observation.exit_code is not None else -1])
-            if observation.exit_code not in (0, None) and state.red_step is None:
+            # A failing run is only a RED observation if there was a test file to
+            # fail. The own-test runner fails on purpose when the suite is empty, so
+            # without this a run could bank an early red_step just by running the
+            # test command before writing anything -- and be reported as red-first.
+            had_a_test_to_fail = observation.exit_code not in (0, None) and state.first_test_step is not None
+            if had_a_test_to_fail and state.red_step is None:
                 state.red_step = step
             if state.red_ok:
                 state.phase = "impl"
