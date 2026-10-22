@@ -247,6 +247,14 @@ def session(subcommand: str, name: str = "", enabled: bool = True):
 
 # ----------------------------------------------------------------- the index
 def _clean(value: object) -> str:
+    """A cell, ready for a tab-separated line: no tabs, no newlines, no secret, no noise.
+
+    Floats are rounded to six decimals. A cost is a measurement, not a float artifact --
+    `0.003846346` in a column a reader has to eyeball is one digit of information and eight
+    of noise.
+    """
+    if isinstance(value, float):
+        return f"{value:.6f}"
     return scrub(str(value).replace("\t", " ").replace("\n", " "))
 
 
