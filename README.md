@@ -123,16 +123,17 @@ throughout (paths shortened; the record holds absolute ones):
 
 ```
 === Submitted ===
-exit=Submitted  steps=10  api_calls=10  cost=$0.0038
-tokens: in=35437 out=5494
-test-first: red-first  (mode=request, red_step=4, first_src_step=7, refusals=0, bypasses=0)
-  diff:       2 added, 1 changed, 0 deleted (+185 -5)
-  log:        ~/.local/state/ninny/logs/20261022-161343-run-default-told-r2.log
+exit=Submitted  steps=9  api_calls=9  cost=$0.0027
+tokens: in=36960 out=3740
+test-first: red-first  (mode=request, red_step=4 (exit 1), first_src_step=5, refusals=0, bypasses=0)
+  diff:       1 added, 1 changed, 0 deleted (+182 -5)
+  log:        ~/.local/state/ninny/logs/20261022-164648-run-redkind-r1.log
 ```
 
 ```
-$ python3 -m ninny check --task tasks/roman --tree runs/roman/default-told-r2/tree
-OK
+$ python3 -m ninny check --task tasks/roman --tree runs/roman/redkind-r1/tree
+ACCEPTANCE: 9 tests, 0 failed
+GATE PASSED
 exit 0
 ```
 
@@ -233,6 +234,12 @@ decides what the model reads. Six arms a cell, two tasks, oracle judged by hand:
 alone cost more, produced fewer red-first runs, and is the only cell where a model evaded
 the rule.
 
+*That conclusion was drawn while the exit-code bug described in
+[Known limits](#known-limits) was still in the harness: most of the example task's banked
+reds were not observations of a failing test, and every cell above that includes them is
+inflated. The arms are being re-run before any of these rates is quoted again. Treat the
+table as what was believed at the time, not as a current result.*
+
 The consequence is now the default: a run that asks for nothing is **told**. It carries the
 enforced wording with the gate left loose, and `--tdd enforce` is what adds refusal on top.
 `off` still means silent; `reverse` keeps its own block, because the enforced text describes
@@ -269,8 +276,24 @@ Every run ends with a verdict:
 - **`no-tests`** — never wrote a test at all.
 
 `run_tests` is a **first-class action**, which is what makes a RED observation a harness
-event rather than a guess at the model's shell history. Its exit status is unambiguous, and
-the record is built on exactly that.
+event rather than a guess at the model's shell history.
+
+That event is a **contract on the exit code**, because the harness will not read compiler
+output to decide whether a test really failed:
+
+```
+0  the tests ran and passed
+1  the tests ran and failed          -> a RED observation
+2  the suite could not run at all    -> nothing was observed, so not a RED
+```
+
+Exit 2 is the load-bearing one. A build error, an import error, a suite with nothing to
+collect -- all of them end non-zero, none of them observed anything, and all of them used to
+be banked as a RED. Such a run still appears in the record, with its code; it is simply not
+an observation, and `enforce` will not unlock the source on one either. On a compiled task
+the shortest path to a legitimate red is therefore the stub that the C++ runner recommends
+in its own failure message. The shipped tasks implement this contract; `ninny/env.py` states
+it once, and `ninny/tdd.py` reads the same constants.
 
 `reverse` is the control that makes a comparison about **order** rather than about how many
 tests happened to get written.
@@ -326,7 +349,8 @@ tree = "tree"
 oracle = "oracle"
 oracle_cmd = "bash oracle/gate.sh"
 
-# What run_tests runs. A non-zero exit is what counts as RED. The script fails when no
+# What run_tests runs. Its exit code is the contract: 1 is a failing test (a RED), 2
+# means the suite could not run, which is not an observation. The script fails when no
 # tests exist, so a vacuous suite cannot be mistaken for a pass.
 test_cmd = "bash tools/run_own_tests.sh"
 
@@ -360,10 +384,13 @@ compiled with `-Wall -Wextra -Wpedantic -Werror` — was ported to this layout, 
 the harness needed to know it was C++: the task brought its own test command, its own
 preflight and its own oracle.
 
-That run also produced the example that justifies the next change (see
+That run also produced the example that forced the change now in the harness (see
 [Known limits](#known-limits)): of its three observed reds, one was `cc1plus: fatal error:
 src/*.cpp: No such file or directory` — a build error, where nothing ran at all — and two
-were real assertion failures. Ninny recorded the build error as the RED.
+were real assertion failures. Ninny banked the build error as the RED and reported the run
+`red-first` off it. Under the exit-code contract it is `red-after-code`: the build error is
+no longer an observation, and the first test that really ran came after the first source
+write.
 
 ## Sandboxing
 
@@ -418,12 +445,16 @@ path, a body builder and a parser. See [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 Written down because a harness that hides its own seams is lying to you.
 
-- **A "RED" is only "the test command exited non-zero."** A compile error, a `NameError` and
-  a real assertion failure all score the same, so a `red-first` verdict can be earned by a
-  typo in the test file — and on a C++ task the first red is usually a build error. Honest
-  as *"the suite was not green"*, weaker than *"the test had teeth"*. The fix is to record
-  **which kind** of red it was (build vs assertion), never to gate on it. The runner already
-  prints the distinction; the record does not yet carry it.
+- **A "RED" is an exit code, and it means only what the task's runner says it means.** The
+  contract above separates "the tests ran and failed" (1) from "nothing ran" (2), and the
+  distinction was measured before it was trusted: of the **36 stored runs that banked a RED,
+  the 25 that banked one where nothing executed were not observations** — in the example
+  task, 24 of its 26, every one of them `Start directory is not importable`, from a package
+  marker that did not exist yet; in the C++ task, its one red, the build error. The harder
+  task was unaffected: **0 of its 9 reds** were fake. A task whose runner exits 1 for both
+  kinds of failure keeps the old weakness, and the harness cannot see that from the outside —
+  a red is worth exactly as much as the task it came from. **What a red still does not mean
+  is that the test had teeth**: see the next limit.
 - **The write gate classifies intent from a shell command**, so a source write through an
   intermediary can slip past it (a heredoc, or a script written into the tree and then run).
   Both live instances were caught by hashing the tree afterwards — which is why the tree,

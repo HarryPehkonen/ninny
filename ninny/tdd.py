@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ninny.artifacts import is_ignored
+from ninny.env import FAILED_EXIT, NOTHING_RAN_EXIT, PASSED_EXIT
 
 MODES = ("off", "request", "enforce", "reverse")
 
@@ -39,6 +40,7 @@ class TDDState:
     first_test_step: int | None = None
     first_src_step: int | None = None
     red_step: int | None = None
+    red_exit: int | None = None
     test_runs: list[list[int]] = field(default_factory=list)
     refusals: list[list] = field(default_factory=list)
     bypass_detected: list[list] = field(default_factory=list)
@@ -78,6 +80,7 @@ class TDDState:
             "first_test_step": self.first_test_step,
             "first_src_step": self.first_src_step,
             "red_step": self.red_step,
+            "red_exit": self.red_exit,
             "red_before_code": self.red_before_code,
             "test_runs": self.test_runs,
             "refusals": self.refusals,
@@ -251,14 +254,24 @@ class TDDPolicy:
                 if state.red_ok:
                     state.phase = "impl"
         elif action.name == "run_tests":
-            state.test_runs.append([step, observation.exit_code if observation.exit_code is not None else -1])
+            code = observation.exit_code if observation.exit_code is not None else -1
+            state.test_runs.append([step, code])
             # A failing run is only a RED observation if there was a test file to
             # fail. The own-test runner fails on purpose when the suite is empty, so
             # without this a run could bank an early red_step just by running the
             # test command before writing anything -- and be reported as red-first.
-            had_a_test_to_fail = observation.exit_code not in (0, None) and state.first_test_step is not None
+            #
+            # And it is only an observation if the suite RAN. Exit 2 is the contract's
+            # "could not run" -- a build error, an import error, a suite with nothing to
+            # collect -- where nothing was executed and therefore nothing was observed.
+            # The code used to be indistinguishable from a failure, which is how a C++
+            # build error became the banked RED of a run reported `red-first` off it.
+            # The run still lands in `test_runs` with its code, so the evidence stays.
+            ran_and_failed = code not in (PASSED_EXIT, NOTHING_RAN_EXIT) and code != -1
+            had_a_test_to_fail = ran_and_failed and state.first_test_step is not None
             if had_a_test_to_fail and state.red_step is None:
                 state.red_step = step
+                state.red_exit = code
             if state.red_ok:
                 state.phase = "impl"
         elif action.is_submit():

@@ -138,6 +138,27 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(self.env.looks_like_src_write("sed -i s/a/b/ src/a.py"), "src/a.py")
         self.assertEqual(self.env.looks_like_src_write("g++ -c src/a.cpp -o a.o"), "")
 
+    def test_the_words_the_model_reads_match_the_code_that_was_exited(self):
+        """A suite that could not run must not be described as tests that failed.
+
+        A live C++ arm was told "exit 1 (tests FAILED, as they must before the
+        implementation exists)" on a `cc1plus: fatal error` -- nothing had run. The
+        harness told the model something false and then banked that same run as its
+        RED. The sentence and the number now come from one place, and both must be true.
+        """
+        from ninny.env import describe_test_exit
+
+        self.assertIn("FAILED", describe_test_exit(1, "bash tools/run_own_tests.sh"))
+        self.assertIn("did not run", describe_test_exit(2, "bash tools/run_own_tests.sh"))
+        self.assertIn("PASSED", describe_test_exit(0, "bash tools/run_own_tests.sh"))
+
+    def test_the_sentence_names_the_command_and_the_code(self):
+        from ninny.env import describe_test_exit
+
+        text = describe_test_exit(1, "bash tools/run_own_tests.sh")
+        self.assertIn("bash tools/run_own_tests.sh", text)
+        self.assertIn("exit 1", text)
+
     def test_a_refused_action_comes_back_as_an_observation_not_a_crash(self):
         from ninny.actions import Action
 

@@ -53,10 +53,22 @@ class RunResult:
             f"exit={self.exit_status}  steps={self.steps}  api_calls={self.api_calls}  "
             f"cost={cost}\n"
             f"tokens: in={self.usage.get('prompt_tokens', 0)} out={self.usage.get('completion_tokens', 0)}\n"
-            f"test-first: {verdict}  (mode={self.tdd.get('mode')}, red_step={self.tdd.get('red_step')}, "
+            f"test-first: {verdict}  (mode={self.tdd.get('mode')}, "
+            f"red_step={self.tdd.get('red_step')}{self._red_exit_note()}, "
             f"first_src_step={self.tdd.get('first_src_step')}, refusals={len(self.tdd.get('refusals', []))}, "
             f"bypasses={len(self.tdd.get('bypass_detected', []))})"
         )
+
+    def _red_exit_note(self) -> str:
+        """Which exit code the banked RED came from.
+
+        Printed next to `red_step` because the number alone is not the whole claim: a
+        red is only an observation if the suite ran, and exit 2 means it did not. The
+        codes are the task contract (see `ninny/tdd.py`).
+        """
+        if self.tdd.get("red_step") is None or self.tdd.get("red_exit") is None:
+            return ""
+        return f" (exit {self.tdd['red_exit']})"
 
 
 class Agent:

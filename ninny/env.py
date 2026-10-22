@@ -19,6 +19,34 @@ from pathlib import Path
 from ninny.actions import Action
 from ninny.sandbox import Sandbox
 
+# The task's test command is the contract, and these are the codes it means. This module
+# runs that command, so this is where the contract is written down; `ninny/tdd.py` reads
+# the same constants to decide whether a RED was observed, and the shipped tasks
+# implement them. Ninny never reads compiler output: a task that cannot tell "the tests
+# failed" from "nothing ran" cannot produce a trustworthy red.
+PASSED_EXIT = 0
+FAILED_EXIT = 1
+NOTHING_RAN_EXIT = 2
+
+
+def describe_test_exit(code: int | None, command: str) -> str:
+    """The sentence the model reads about a test run, in the code's own terms.
+
+    The words have to match the number, because this sentence is what the model uses to
+    decide what to do next. A live C++ arm was told "tests FAILED, as they must before the
+    implementation exists" on a `cc1plus: fatal error`, where nothing had run at all --
+    so the harness misled the model and then banked that run as its RED.
+    """
+    if code == PASSED_EXIT:
+        verdict = "tests PASSED"
+    elif code == NOTHING_RAN_EXIT:
+        verdict = "the suite did not run, so nothing was observed"
+    elif code == FAILED_EXIT:
+        verdict = "tests FAILED, as they must before the implementation exists"
+    else:
+        verdict = "outcome unclear from the code alone"
+    return f"ran: {command}  ->  exit {code}  ({verdict})"
+
 # Conservative detector for a shell command that writes into the source tree.
 # It exists so an enforcement bypass is at least visible; it is not a guarantee.
 _SRC_WRITE_HINTS = [
@@ -131,11 +159,7 @@ class Environment:
         if not self.test_cmd:
             raise ActionError("this task declares no test_cmd, so there is nothing to run")
         observation = self.bash(self.test_cmd, timeout=timeout or self.test_timeout)
-        observation.note = (
-            f"ran: {self.test_cmd}  ->  exit {observation.exit_code}"
-            + ("  (tests FAILED, as they must before the implementation exists)"
-               if observation.exit_code else "  (tests PASSED)")
-        )
+        observation.note = describe_test_exit(observation.exit_code, self.test_cmd)
         return observation
 
     # ------------------------------------------------------------------- helpers

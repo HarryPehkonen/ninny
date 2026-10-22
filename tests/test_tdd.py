@@ -310,6 +310,84 @@ class RedObservationTests(TDDBase):
         self.assertEqual(state.verdict(), "red-first")
 
 
+class RedMustHaveRunTests(TDDBase):
+    """A RED observation has to be a test that RAN and then failed.
+
+    A suite that does not compile also exits non-zero, so the old rule banked a RED the
+    moment the compiler refused -- with nothing executed and nothing observed. The C++
+    task's own runner said exactly this in prose ("a build error is not a RED") and then
+    exited 1, which is the code Ninny counted as the RED event. The live C++ arm was
+    reported `red-first` off that: its banked red was the build error at step 4, its
+    first source write was step 7, and its first test that actually ran and failed was
+    step 8.
+
+    The contract is the task's own exit code, which keeps this language-agnostic and lets
+    Ninny stay out of the business of parsing compiler output:
+
+        0  the tests ran and passed
+        1  the tests ran and failed          -> a RED observation
+        2  the tests could not run at all    -> not an observation of anything
+    """
+
+    def test_a_suite_that_could_not_run_is_not_a_red_observation(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=2, step=2)
+        self.assertIsNone(state.red_step)
+        self.assertEqual(state.verdict(), "no-red")
+
+    def test_a_suite_that_cannot_compile_does_not_unlock_the_source_gate(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=2, step=2)
+        self.assertFalse(self.allow(policy, state, self.write("src/thing.py")))
+
+    def test_the_run_that_could_not_run_is_still_in_the_record(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=2, step=2)
+        self.assertEqual(state.test_runs, [[2, 2]])
+
+    def test_a_test_that_really_failed_still_banks_a_red(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=2)
+        self.assertEqual(state.red_step, 2)
+
+    def test_the_code_of_the_red_is_kept(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=2)
+        self.assertEqual(state.red_exit, 1)
+        self.assertEqual(state.as_dict()["red_exit"], 1)
+
+    def test_a_build_error_then_a_stub_then_a_real_red_reads_as_red_after_code(self):
+        # The shape of the live C++ arm, once the build error stops counting.
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.apply(policy, state, self.run_tests(), exit_code=2, step=2)   # cannot compile
+        self.apply(policy, state, self.write("src/thing.py"), step=3)      # stubs
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=4)   # a real failure
+        self.assertEqual(state.red_step, 4)
+        self.assertEqual(state.verdict(), "red-after-code")
+
+    def test_the_summary_line_names_the_code_the_red_came_from(self):
+        from ninny.agent import RunResult
+
+        result = RunResult(tdd={"verdict": "no-red", "mode": "request", "red_step": None,
+                                "red_exit": None, "first_src_step": None})
+        self.assertIn("red_step", result.summary())
+        result.tdd.update({"verdict": "red-after-code", "red_step": 4, "red_exit": 1})
+        self.assertIn("red_step=4", result.summary())
+        self.assertIn("exit 1", result.summary())
+
+
 class GreenTreeRuleTests(TDDBase):
     """A run must not hand back a tree its own tests say is broken.
 
