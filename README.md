@@ -25,13 +25,21 @@ alongside whether the code works.
 pip install ninny     # installs nothing else
 ```
 
-Ninny imports only the standard library. That is a deliberate reversal of the
-upstream design, for a measured reason: mini-swe-agent declares 15 runtime
-dependencies, and **litellm — one of them — pulls in `mcp`**. It is the transitive
-source of a plugin protocol in what should be a 400-line loop, which is why
-installing mini needs `--with "mcp>=2.2.0,<3"` to stop a `ModuleNotFoundError` on
-the call path. `import litellm` also costs 2.7 s before any work happens. Dropping
-it dropped all of that.
+Ninny imports only the standard library, and that is not a slogan: the whole suite
+passes with site-packages switched off.
+
+```
+python3 -S -m unittest discover -s tests -t .    # 130 tests, OK
+```
+
+It is a deliberate reversal of the upstream design, for a measured reason:
+mini-swe-agent declares **14 runtime requirements** — 35 `Requires-Dist` lines in all,
+the other 21 behind the `dev` / `modal` / `contree` extras, which are not what an
+install pulls — and **litellm, one of the 14, pulls in `mcp`**. It is the transitive
+source of a plugin protocol in what should be a 400-line loop, which is why installing
+mini needs `--with "mcp>=2.2.0,<3"` to stop a `ModuleNotFoundError` on the call path.
+`import litellm` also costs 2.7 s before any work happens. Dropping it dropped all of
+that.
 
 ## Quickstart
 
