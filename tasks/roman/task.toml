@@ -1,0 +1,24 @@
+name = "roman"
+spec_file = "SPEC.md"
+tree = "tree"
+
+# The acceptance suite lives HERE, never inside tree/. If the agent could read it
+# it could write its own tests from the answer key, and "did it write tests" and
+# "did it write them first" would both stop meaning anything.
+oracle = "oracle"
+oracle_cmd = "bash oracle/gate.sh"
+
+# What the `run_tests` action runs, and the event the test-first record is built
+# on: a non-zero exit here is a RED observation. The script itself fails when no
+# tests exist, so a vacuous suite cannot be mistaken for a pass.
+test_cmd = "bash tools/run_own_tests.sh"
+
+test_globs = ["tests/own/**"]
+src_globs = ["src/**"]
+# The agent may not edit these: it would be editing the instrument.
+protected_globs = ["tools/**"]
+
+preflight = ["python3 -V"]
+step_limit = 25
+timeout_s = 60
+test_timeout_s = 120

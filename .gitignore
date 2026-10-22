@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+
+# Run artifacts: trajectories, submissions, staged checks. Not source.
+runs/
+tasks/*/checks/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
