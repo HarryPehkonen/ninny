@@ -13,9 +13,18 @@ import difflib
 import hashlib
 from pathlib import Path
 
-# Bytecode caches and tool droppings are not part of the work, and they appear and
-# vanish between two runs of the same thing.
+# Which files in a tree are real. ONE definition, used by the digest, the diff and the
+# test-first gate, because they have to agree: if the gate counts a bytecode cache as
+# source, then merely RUNNING the tests looks like editing the code, `first_src_step`
+# moves to the red step, and a textbook red-first run is reported as "red-after-code".
 SKIP_PARTS = {"__pycache__", ".git", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+SKIP_SUFFIXES = (".pyc", ".pyo")
+
+
+def is_ignored(path: str | Path) -> bool:
+    """True for a file that is not part of what a human would call the source."""
+    path = Path(path)
+    return bool(SKIP_PARTS.intersection(path.parts)) or path.suffix in SKIP_SUFFIXES
 
 
 def _files(root: Path) -> dict[str, Path]:
@@ -25,7 +34,7 @@ def _files(root: Path) -> dict[str, Path]:
     if not root.is_dir():
         return out
     for path in sorted(root.rglob("*")):
-        if path.is_file() and not SKIP_PARTS.intersection(path.parts):
+        if path.is_file() and not is_ignored(path.relative_to(root)):
             out[path.relative_to(root).as_posix()] = path
     return out
 

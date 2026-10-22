@@ -12,7 +12,7 @@ from pathlib import Path
 from ninny.actions import Action
 from ninny.config import Task
 from ninny.env import Observation
-from ninny.tdd import MODES, TDDPolicy
+from ninny.tdd import MODES, TDDPolicy, snapshot
 
 
 def build_task(root: Path) -> Task:
@@ -362,6 +362,67 @@ class GreenTreeRuleTests(TDDBase):
         state = policy.new_state()
         self.apply(policy, state, self.run_tests(), exit_code=1, step=1)
         self.assertEqual(policy.gate(self.submit(), state, 2), "")
+
+
+class SnapshotNoiseTests(TDDBase):
+    """Running the tests must not look like editing the source.
+
+    The test command imports the package under `src_globs`, so running it writes
+    `__pycache__`. While pycache counted as source, the act of running the suite set
+    `first_src_step` -- and a textbook red-first run (test at 8, red at 9, fix at 10)
+    was reported as "red-after-code". Three batch arms were misreported that way, and
+    this is the one number in the project that must never be wrong.
+    """
+
+    def noise(self, text: str = "noise") -> Path:
+        """What a test run leaves behind when it imports the source."""
+        d = self.work / "src" / "__pycache__"
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / "thing.cpython-313.pyc"
+        path.write_bytes(text.encode())
+        return path
+
+    def test_a_pycache_write_is_not_a_source_change(self):
+        before = snapshot(self.work, self.task.src_globs)
+        self.noise()
+        self.assertEqual(snapshot(self.work, self.task.src_globs), before)
+
+    def test_running_the_tests_does_not_set_first_src_step(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=1)
+        self.noise()  # the test run imported the package
+        policy.observe_tree(state, 2)
+        self.assertIsNone(state.first_src_step)
+
+    def test_pycache_churn_is_not_a_bypass(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.noise("first")
+        policy.observe_tree(state, 1)
+        self.noise("second")
+        policy.observe_tree(state, 2)
+        self.assertEqual(state.bypass_detected, [])
+
+    def test_a_real_source_edit_is_still_a_change(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        (self.work / "src" / "thing.py").write_text("value = 1\n")
+        policy.observe_tree(state, 4)
+        self.assertEqual(state.first_src_step, 4)
+
+    def test_a_red_run_before_the_fix_still_reads_as_red_first(self):
+        # The end-to-end shape of the three misreported arms.
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=8)
+        self.noise()
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=9)
+        policy.observe_tree(state, 9)
+        (self.work / "src" / "thing.py").write_text("value = 1\n")
+        policy.observe_tree(state, 10)
+        self.assertEqual(state.first_src_step, 10)
+        self.assertEqual(state.verdict(), "red-first")
 
 
 class VerdictTests(TDDBase):

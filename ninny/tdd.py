@@ -26,6 +26,8 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ninny.artifacts import is_ignored
+
 MODES = ("off", "request", "enforce", "reverse")
 
 
@@ -99,9 +101,12 @@ def snapshot(workdir: Path, globs: list[str]) -> dict[str, str]:
         root = workdir / base
         paths = [root] if root.is_file() else (sorted(root.rglob("*")) if root.is_dir() else [])
         for path in paths:
-            if path.is_file():
+            rel = path.relative_to(workdir)
+            # Bytecode caches are not source. Running the tests creates them, so
+            # counting them made the suite's own run look like a source edit.
+            if path.is_file() and not is_ignored(rel):
                 try:
-                    out[str(path.relative_to(workdir))] = hashlib.sha256(path.read_bytes()).hexdigest()
+                    out[str(rel)] = hashlib.sha256(path.read_bytes()).hexdigest()
                 except OSError:
                     continue
     return out
