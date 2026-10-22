@@ -234,14 +234,24 @@ class TDDPolicy:
             state.phase = "done"
 
     def observe_tree(self, state: TDDState, step: int) -> None:
+        """Reconcile the record against the tree, which is the ground truth.
+
+        A source change made through a route the action log cannot see -- a shell
+        heredoc, sed, a script -- still counts as a source change, so the first one
+        sets `first_src_step`. Without this the verdict can silently read
+        `red-no-impl` for a run that wrote its code first.
+
+        A bypass is only a bypass where the gate was supposed to refuse. In the other
+        modes nothing was gated, so recording one would mislabel the control arm of a
+        comparison as a run that cheated.
+        """
         current = snapshot(self.workdir, self.task.src_globs)
-        # A bypass is only a bypass where the gate was supposed to refuse. In the
-        # other modes nothing was gated, so recording one would mislabel the control
-        # arm of a comparison as a run that cheated.
+        changed = [path for path, signature in current.items() if self._baseline_src.get(path) != signature]
+        if changed and state.first_src_step is None:
+            state.first_src_step = step
         if self.mode == "enforce" and state.phase == "test":
-            for path, signature in current.items():
-                if self._baseline_src.get(path) != signature:
-                    entry = [step, path]
-                    if entry not in state.bypass_detected:
-                        state.bypass_detected.append(entry)
+            for path in changed:
+                entry = [step, path]
+                if entry not in state.bypass_detected:
+                    state.bypass_detected.append(entry)
         self._baseline_src = current

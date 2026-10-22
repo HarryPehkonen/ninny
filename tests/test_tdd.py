@@ -242,6 +242,39 @@ class ModeTests(TDDBase):
         self.assertEqual(policy.gate_submit_reverse(state, 4), "")
 
 
+class SourceRecordTests(TDDBase):
+    """The tree is the ground truth, not the action log.
+
+    A model can change a source file through a route the action record cannot see --
+    a shell heredoc, sed, a script. The record must still notice, or `first_src_step`
+    is missing and the verdict silently becomes `red-no-impl` instead of
+    `red-after-code`.
+    """
+
+    def test_a_source_change_the_action_log_never_saw_still_counts(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        (self.work / "src" / "thing.py").write_text("value = 9\n")  # as a shell would
+        policy.observe_tree(state, step=2)
+        self.assertEqual(state.first_src_step, 2)
+
+    def test_a_shell_source_change_before_the_test_is_not_reported_as_red_first(self):
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        (self.work / "src" / "thing.py").write_text("value = 9\n")
+        policy.observe_tree(state, step=2)
+        self.apply(policy, state, self.write("tests/own/test_thing.py"), step=3)
+        self.apply(policy, state, self.run_tests(), exit_code=1, step=4)
+        self.assertEqual(state.verdict(), "red-after-code")
+
+    def test_a_shell_source_change_is_still_a_bypass_under_enforce(self):
+        policy = self.policy_for("enforce")
+        state = policy.new_state()
+        (self.work / "src" / "thing.py").write_text("value = 9\n")
+        policy.observe_tree(state, step=2)
+        self.assertEqual(state.bypass_detected, [[2, "src/thing.py"]])
+
+
 class RedObservationTests(TDDBase):
     """A failing run only counts as RED if there was a test file to fail.
 
