@@ -120,9 +120,15 @@ comparison against `request` therefore cannot say which of the two did the work 
 in the first eighteen-arm batch the gate never fired once, while the behaviour changed
 anyway.
 
-`--tdd` decides what the gate blocks. `--tdd-prompt` decides what the model reads. They
-default to the same value, so nothing that ran before this existed changes behaviour.
-Set apart, they are the experiment:
+`--tdd` decides what the gate blocks. `--tdd-prompt` decides what the model reads. A run
+that asks for nothing is now **told**: the enforced wording ships by default, the gate
+stays loose, and `--tdd enforce` is what adds refusal on top of it. Over six arms a cell,
+that is red-first 6/6 at $0.0140 against 2/6 at $0.0245 for the same loose gate carrying
+no wording — and the gate itself never fired in either cell, so the wording was the whole
+intervention. `off` still means silent, and `reverse` keeps its own block, because the
+enforced text describes the opposite sequence.
+
+Set the two axes apart by hand when you are measuring rather than working:
 
 ```bash
 # told, not blocked

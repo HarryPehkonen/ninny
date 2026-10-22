@@ -238,5 +238,45 @@ class PromptModeTests(unittest.TestCase):
         self.assertEqual(run["tdd_prompt_mode"], "enforce")
 
 
+class DefaultPromptModeTests(unittest.TestCase):
+    """A reader who types nothing gets TOLD, because that is what the measurement says.
+
+    Six arms of `--tdd request` with the plain Testing block: red-first 2/6 at $0.0245 an
+    arm. Six arms of the same loose gate with the enforced wording: 6/6 at $0.0140, with
+    zero refusals -- the gate never fired, so the wording was the whole intervention. A
+    default run should therefore carry the wording. Two modes are exempt and for
+    different reasons: `off` promises not to mention testing at all, and `reverse` keeps
+    its own block because the enforced text describes the opposite sequence.
+    """
+
+    def test_a_default_request_run_is_told_to_write_the_test_first(self):
+        from ninny.cli import resolve_prompt_mode
+
+        self.assertEqual(resolve_prompt_mode("request", ""), "enforce")
+
+    def test_enforce_is_unchanged(self):
+        from ninny.cli import resolve_prompt_mode
+
+        self.assertEqual(resolve_prompt_mode("enforce", ""), "enforce")
+
+    def test_reverse_is_not_told_the_opposite_sequence(self):
+        from ninny.cli import resolve_prompt_mode
+
+        self.assertEqual(resolve_prompt_mode("reverse", ""), "reverse")
+
+    def test_off_still_means_silent(self):
+        from ninny.cli import resolve_prompt_mode
+
+        self.assertEqual(resolve_prompt_mode("off", ""), "off")
+
+    def test_an_explicit_prompt_mode_always_wins(self):
+        """The measurement arms depend on this: `request` must stay reachable."""
+        from ninny.cli import resolve_prompt_mode
+
+        self.assertEqual(resolve_prompt_mode("request", "request"), "request")
+        self.assertEqual(resolve_prompt_mode("enforce", "request"), "request")
+        self.assertEqual(resolve_prompt_mode("off", "enforce"), "enforce")
+
+
 if __name__ == "__main__":
     unittest.main()

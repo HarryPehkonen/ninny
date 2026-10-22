@@ -35,6 +35,25 @@ from ninny.tdd import MODES, TDDPolicy
 
 
 # ------------------------------------------------------------------------ run
+def resolve_prompt_mode(tdd: str, prompt: str) -> str:
+    """Which `## Testing` block the model reads.
+
+    The gate and the words are separate axes. `request` is the loose gate: it measures the
+    order without refusing anything. On its own it used to ship a block that said there
+    was no rule about the order -- measured at red-first 2/6 and $0.0245 an arm, against
+    6/6 and $0.0140 for the same gate with the enforced wording, with zero refusals in
+    either cell. The wording was the whole intervention, so the wording is what a run that
+    asks for nothing now carries: TOLD by default, and blocked only if you say `enforce`.
+
+    Two modes are exempt, for different reasons. `off` promises not to mention testing at
+    all. `reverse` keeps its own block because the enforced text describes the opposite
+    sequence (test, fail, then implement) and telling a reverse run that would be a lie.
+    """
+    if prompt:
+        return prompt
+    return "enforce" if tdd == "request" else tdd
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     task = load_task(args.task)
     base_url, api_key, wire = resolve_endpoint(args)
@@ -113,7 +132,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         step_limit=steps,
         wall_time_limit=args.wall_time,
         sandbox_note=sandbox.plan(workdir)[1],
-        prompt_mode=args.tdd_prompt,
+        prompt_mode=resolve_prompt_mode(args.tdd, args.tdd_prompt),
         log=(lambda _line: None) if args.quiet else print,
     )
     result = agent.run()
@@ -376,7 +395,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--api-key", help="defaults to the provider's environment variable")
     run.add_argument("--wire", choices=["chat", "completions"], help="protocol shape")
     run.add_argument("--tdd", choices=list(MODES), default="request",
-                     help="request: measure only (default) | enforce: refuse src writes until RED "
+                     help="what the gate does. request: measure the order, refuse nothing "
+                          "(default) | enforce: also refuse src writes until a RED is seen "
                           "| reverse: code first, tests required before submit | off")
     run.add_argument("--sandbox", choices=["none", "bwrap"], default="none")
     run.add_argument("--bwrap-path", help="path to a bwrap binary, if it is not on PATH")
@@ -396,8 +416,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--allow-oracle-visible", action="store_true",
                      help="run even though the agent can read the oracle (result is unattributable)")
     run.add_argument("--tdd-prompt", choices=MODES, default="",
-                     help="which Testing block the model READS; defaults to --tdd. Setting "
-                          "it apart from --tdd is how 'told' and 'blocked' are separated")
+                     help="which Testing block the model READS. Default: told -- the "
+                          "enforced wording for --tdd request, and --tdd itself otherwise. "
+                          "Setting it apart from --tdd is how 'told' and 'blocked' are "
+                          "separated when you are measuring instead of working")
     run.add_argument("--allow-red-submit", action="store_true",
                      help="let a run submit while its own tests are still failing")
     run.add_argument("--force", action="store_true", help="archive an existing run and rerun")
