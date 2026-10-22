@@ -20,8 +20,9 @@ Licence:   MIT. The upstream copyright notice and permission text are preserved
   python-dotenv, platformdirs). litellm was the transitive source of an `mcp`
   dependency; Ninny has no MCP and no plugin system.
 - **Actions beyond bash**: `write_file`, `read_file` and `run_tests`.
-- **A test-first state machine** with three modes (request / enforce / reverse)
-  and a recorded RED-compliance verdict for every run.
+- **A test-first state machine** with three modes (request / enforce / reverse, plus
+  `off`) and a recorded RED-compliance verdict for every run. The gate and the wording
+  the model reads are separate axes, so "told" and "blocked" can be told apart.
 - **Path confinement** for the file tools, and an optional bubblewrap sandbox
   that makes the host, and any reference solution kept outside the working tree,
   invisible to the agent.
