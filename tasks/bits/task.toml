@@ -13,6 +13,9 @@ fixed_tree = "fixed"
 # The command runs with cwd set to the staging directory, where the oracle has been
 # copied to ./oracle -- so the path is relative to THAT, not to the oracle directory.
 oracle_cmd = "bash oracle/accept.sh"
+# A planted failing test, so `ninny verify-task` can require this task's own runner to
+# report a red as a red. Runs with cwd = the staging directory, like oracle_cmd.
+probe_cmd = "bash oracle/probe.sh"
 
 test_cmd = "bash tools/run_own_tests.sh"
 test_globs = ["tests/own/**"]

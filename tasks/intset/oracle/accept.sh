@@ -21,6 +21,14 @@ while read -r want path; do
     bad=1
   fi
 done < "$here/frozen.sha256"
+# An empty manifest would check nothing and then print the same reassuring line: the vacuous
+# pass this project exists to refuse. Measured -- the file was emptied by a stray redirect and
+# the oracle still reported "every frozen file is unchanged".
+entries=$(grep -c . "$here/frozen.sha256" 2>/dev/null || true)
+if [ "${entries:-0}" -lt 1 ]; then
+  echo "ORACLE FAILED: frozen.sha256 lists no files, so nothing was checked"
+  exit 1
+fi
 if [ "$bad" -ne 0 ]; then
   echo "ORACLE FAILED: the submission edited the instrument that measures it"
   exit 1

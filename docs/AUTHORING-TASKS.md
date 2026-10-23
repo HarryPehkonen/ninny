@@ -118,6 +118,23 @@ across targets, because `0 passed` is a green run.
   parsing before any model call and cost nothing.
 - **A refused run costs no money.** Preflight runs *inside* the sandbox before the first
   model call, which is why a toolchain mistake is a refusal rather than a wasted arm.
+- **A planted test must match the runner's own discovery rule, or it never runs.** The first
+  version of `roman`'s probe wrote `tests/own/probe_test.py`; unittest's default pattern is
+  `test*.py`, so the suite correctly found nothing and the control failed with "exit 2". The
+  probe's file name is part of the task's contract.
+- **A README may not promise a discovery rule the toolchain does not have.** `tasks/intset`
+  told the agent to write `tests/own/*.rs`, and Cargo only autodiscovers `tests/*.rs` and
+  `tests/*/main.rs`. Measured: `tests/own/merging.rs` left the suite at `exit 2` "0 passed",
+  while `tests/own/main.rs` produced a real red. An agent following that README literally
+  cannot bank a red, so under `--tdd enforce` the task is unsolvable. The README now names
+  `main.rs` and explains `mod`, and its example is code that is run.
+- **`fixed/` has to be changed with `tree/`.** Every frozen file the tree carries lives in
+  `fixed/` too, so a correction applied to one without the other makes the answer key fail its
+  own frozen check. The two-way control caught exactly this within a minute: *"oracle is GREEN
+  on the fixed tree"* FAILED, because the answer key still held the old runner.
+- **An empty frozen manifest is a vacuous pass.** `frozen.sha256` emptied by a stray redirect
+  makes the oracle's `while read` loop run zero times, and it still printed *"every frozen file
+  is unchanged"*. The manifest is now required to list at least one file.
 
 ## What was easy
 

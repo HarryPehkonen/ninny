@@ -292,6 +292,55 @@ roman-cli  11-21 / 40          red-first x3        3/3 pass     0.0348
   evidence that the model is not the thing that failed here.
 - 0 bypasses were recorded across all 18 arms, and no arm modified a protected file.
 
+## The third control: the task's own runner -- 2026-10-23
+
+`verify-task` graded the oracle twice, and the task's own runner never. Both published tasks
+that turned out to be broken lived exactly there, and both passed every static control for
+weeks.
+
+**What was built.** `probe_cmd` in `task.toml`: a command that plants a test which cannot pass.
+The control stages the tree the agent starts from, runs that recipe, runs the task's own
+`test_cmd`, and requires **exit 1**. `0` means the suite cannot see a red; `2` means the runner
+misreports a red as a build error; a recipe that does not land is reported as the recipe's
+fault, never the runner's. Eight unit tests in `tests/test_verify_runner_truth.py`, and all six
+published tasks now declare one and verify with *"3 controls ran"*. A task without `probe_cmd`
+is still verified and says which control did not run: not a runner that lies, a runner nobody
+has asked yet.
+
+**The dataset was wrong on the first attempt, and four real tasks said so.** Sabotaging the
+ANSWER KEY asks the runner nothing: the answer key carries no suite (the agent writes that), so
+`test_cmd` on it correctly answers 2 "nothing ran" and the control measures nothing. Plant a
+test instead. This cost one round trip and is the reason the rule below exists.
+
+### Three defects in one task, all the same family
+
+1. **`tasks/intset` reported a genuine red as `exit 2`.** Its "nothing ran" guard matched
+   Cargo's own `error: test failed, to rerun pass ...` line. Proven with a mutant that still
+   compiles: 20 tests ran, 3 failed, and the old runner answered *"BUILD FAILED -- the suite
+   did not compile, so nothing ran"*. The guard is now bounded to compile diagnostics.
+2. **Its `tests/own/README.md` told the agent to write `tests/own/*.rs`**, and Cargo
+   autodiscovers only `tests/*.rs` and `tests/*/main.rs`. Measured: `tests/own/merging.rs` left
+   the suite at exit 2 with "0 passed"; `tests/own/main.rs` produced a real red. An agent
+   following that README literally cannot bank a red, so under `--tdd enforce` the task is
+   unsolvable. The README now names `main.rs`, explains `mod`, and its example is code that is
+   run -- proved by running it against the answer key (2 cases, 0 failed).
+3. **Its `frozen.sha256` was emptied by a stray redirect**, and the oracle's `while read` loop
+   then ran zero times and still printed *"every frozen file is unchanged"*: the vacuous pass
+   this project exists to refuse, inside an oracle. It now requires at least one entry, proven
+   by emptying it and watching the oracle refuse.
+
+Plus one caught on the author, within a minute of the control existing: `fixed/` was not updated
+alongside `tree/`, so the answer key failed its own frozen check (*"oracle is GREEN on the fixed
+tree"* FAILED). `fixed/` carries the whole tree; a correction applied to one without the other
+is a broken task.
+
+### The rule this leaves behind
+
+**Grade the instrument the agent uses, not only the one that grades the agent.** An oracle that
+is proved in both directions says nothing about the `test_cmd` the model actually calls, and a
+`test_cmd` that misreports its own exit code costs the model its entire red record -- which is
+the number the whole project is built on.
+
 ## Open, deliberately not done
 
 - **Version stamp for frozen files** — distinguish "task updated" from "submission edited".

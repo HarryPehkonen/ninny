@@ -1,7 +1,16 @@
 # Your tests go here
 
-Every `tests/own/*.rs` is a Cargo integration test. No dependencies, and none may be
-added:
+`tests/own/main.rs` is the integration test target Cargo discovers, and it is the only file in
+this directory that is compiled by itself. Everything you want to run must be reachable from it:
+
+* put your cases in `main.rs` as `#[test]` functions, or
+* split them across sibling files and declare each one in `main.rs` with `mod merging;`.
+
+A sibling file that `main.rs` does not declare is never compiled, so `cargo test` runs nothing
+and `tools/run_own_tests.sh` answers exit 2 -- "nothing ran", which is not a red. Unit tests
+inside `src/lib.rs` are run as well, so both places work.
+
+No dependencies, and none may be added:
 
 ```rust
 use intset::{add, contains, normalize};

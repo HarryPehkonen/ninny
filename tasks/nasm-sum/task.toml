@@ -15,6 +15,9 @@ fixed_tree = "fixed"
 
 oracle = "oracle"
 oracle_cmd = "bash oracle/accept.sh"
+# A planted failing test, so `ninny verify-task` can require this task's own runner to
+# report a red as a red. Runs with cwd = the staging directory, like oracle_cmd.
+probe_cmd = "bash oracle/probe.sh"
 
 test_cmd = "bash tools/run_own_tests.sh"
 test_globs = ["tests/own/**"]

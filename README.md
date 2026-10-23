@@ -203,9 +203,20 @@ $ python3 -m ninny verify-task --task tasks/roman
   INFO  own test command fails on the tree the agent starts from   (exit 1 -- expected ...)
   PASS  oracle is RED on the given tree   (exit 1)
   PASS  oracle is GREEN on the fixed tree   (exit 0)
+  PASS  own test command reports a planted failing test as a red   (exit 1 -- it ran, and failed)
 
-VERIFIED: the oracle fails where it must, and passes where it must.
+VERIFIED: the oracle fails where it must, and passes where it must.  (3 controls ran)
 ```
+
+The third control is the one that grades the *task's own runner* rather than the oracle. It
+plants a test that cannot pass (`oracle/probe.sh`, declared as `probe_cmd`), runs the task's
+own test command, and requires `1` — ran, and failed. A `2` there means the runner misreports
+a red as a build error; a `0` means its suite cannot see a red at all. The dataset has to be a
+*planted test*, not a broken answer key: the answer key carries no suite (the agent writes
+that), so `test_cmd` on it correctly answers `2` and the control would ask the runner nothing.
+
+A task with no `probe_cmd` is still verified, and says which control did not run — it is not a
+task whose runner lies, it is a task whose runner nobody has asked yet.
 
 Exit `0` verified, `1` broken task, `2` unverified — a control that has never been run.
 `INFO` never condemns a task: a runner that fails on an empty suite is a *good* runner,
@@ -215,6 +226,15 @@ case it is; the tool refuses to guess.
 This check earns its keep. It caught its own author: an early fixture ran `grep` and then
 `echo`, so the script's exit status was `echo`'s and the oracle passed on everything.
 `verify-task` said *"it passes on the tree the agent starts from, so it grades nothing."*
+
+So did the third control, within an hour of existing. Both controls above grade the oracle;
+neither ever ran the task's own runner against a case it could see failing, and that blind spot
+is n=2: `tasks/bits` shipped refusing the edit it required, and `tasks/intset` shipped a
+genuine red reported as `exit 2` "nothing ran" because its build-error grep matched Cargo's own
+`error: test failed, to rerun pass ...` line. Both passed every static control for weeks; both
+were found by spending money on a model. The same task's `tests/own/README.md` also told the
+agent to write `tests/own/*.rs`, which Cargo never compiles — that README now says
+`tests/own/main.rs`, and its example is code that is run.
 
 ## Told, and blocked, are two different things
 
@@ -371,6 +391,12 @@ spec_file = "SPEC.md"
 tree = "tree"
 oracle = "oracle"
 oracle_cmd = "bash oracle/gate.sh"
+
+# verify-task's third control: a command that plants a test which cannot pass, so the task's
+# own runner can be required to report it as a red (exit 1) rather than as "nothing ran"
+# (exit 2). Runs with cwd = the staging directory, like oracle_cmd. Optional: without it the
+# control says it did not run, and the task is still verified by the two oracle controls.
+probe_cmd = "bash oracle/probe.sh"
 
 # What run_tests runs. Its exit code is the contract: 1 is a failing test (a RED), 2
 # means the suite could not run, which is not an observation. The script fails when no

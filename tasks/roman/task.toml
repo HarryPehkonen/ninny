@@ -12,6 +12,9 @@ fixed_tree = "fixed"
 # "did it write them first" would both stop meaning anything.
 oracle = "oracle"
 oracle_cmd = "bash oracle/gate.sh"
+# A planted failing test, so `ninny verify-task` can require this task's own runner to
+# report a red as a red. Runs with cwd = the staging directory, like oracle_cmd.
+probe_cmd = "bash oracle/probe.sh"
 
 # What the `run_tests` action runs, and the event the test-first record is built
 # on: a non-zero exit here is a RED observation. The script itself fails when no

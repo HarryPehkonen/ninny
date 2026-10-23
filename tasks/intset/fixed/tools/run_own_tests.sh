@@ -14,9 +14,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
-if ! ls tests/own/*.rs >/dev/null 2>&1 && ! grep -q '#\[test\]' src/lib.rs 2>/dev/null; then
-  echo "no tests in tests/own/*.rs and no #[test] in src/lib.rs -- nothing to run yet."
-  echo "Write one case that fails because the behaviour is not there, then run it."
+if ! ls tests/own/main.rs >/dev/null 2>&1 && ! grep -q '#\[test\]' src/lib.rs 2>/dev/null; then
+  echo "no tests/own/main.rs and no #[test] in src/lib.rs -- nothing to run yet."
+  echo "Cargo discovers tests/own/main.rs as this crate's integration target: a sibling .rs"
+  echo "file is only compiled if main.rs declares it with \`mod\`."
   exit 2
 fi
 
@@ -25,7 +26,13 @@ rc=$?
 printf '%s\n' "$out"
 
 # A compile error is not a RED: nothing ran, so nothing was observed.
-if printf '%s\n' "$out" | grep -qE "^error(\[E[0-9]+\])?:|^error\[E[0-9]+\]"; then
+#
+# Bounded to COMPILE diagnostics on purpose. An earlier version matched any line starting
+# with `error:`, and cargo prints one when a test fails -- `error: test failed, to rerun
+# pass \`--test own\`` -- so every genuine red was reported as exit 2 "nothing ran" and this
+# task could not bank a red at all. The `test result:` lines below are the other half of the
+# same distinction: a compile error is the one that never got that far.
+if printf '%s\n' "$out" | grep -qE "^error\[E[0-9]+\]:|^error: could not compile|^error: expected "; then
   echo
   echo "BUILD FAILED -- the suite did not compile, so nothing ran. A build error is not a"
   echo "RED, and exit code 2 is how this script says so."

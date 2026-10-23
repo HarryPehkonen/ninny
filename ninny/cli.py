@@ -364,6 +364,57 @@ def cmd_verify(args: argparse.Namespace) -> int:
                  f"exit {code} -- it does not pass on the known-good tree, so the task may be unsolvable")
             )
 
+    # The third control: the task's own runner must report a planted failing test as a red.
+    #
+    # Both controls above grade the ORACLE, and neither ever runs test_cmd against a case it
+    # can see failing -- which is how `tasks/intset` shipped a genuine red reported as exit 2
+    # ("nothing ran") and `tasks/bits` shipped refusing the edit it required, while both
+    # passed every control here for weeks.
+    #
+    # The dataset has to be a PLANTED test, not a broken answer key: the answer key carries no
+    # suite (the agent writes that), so `test_cmd` on it correctly answers 2 -- "nothing ran" --
+    # and asks the runner nothing. Measured on all four tasks that were tried that way.
+    control_red = "own test command reports a planted failing test as a red"
+    recipe = str(task.meta.get("probe_cmd") or "").strip()
+    if not recipe:
+        checks.append(("INFO", control_red,
+                       "no probe_cmd in task.toml, so this control did not run"))
+    else:
+        # A separate staged copy of the tree the agent starts from: the probe must never
+        # touch the task on disk.
+        probed = _stage(task, task.tree_src, base, "probe")
+        try:
+            done = subprocess.run(recipe, shell=True, cwd=str(probed), capture_output=True,
+                                  text=True, timeout=max(600, task.test_timeout_s))
+        except subprocess.TimeoutExpired:
+            checks.append(("FAIL", control_red,
+                           f"the probe recipe timed out after {max(600, task.test_timeout_s)}s"))
+        else:
+            if done.returncode != 0:
+                # A recipe that did not land plants nothing, and the suite is then green for a
+                # reason that has nothing to do with the runner: say which it was.
+                checks.append(("FAIL", control_red,
+                               f"the probe recipe exited {done.returncode} -- it did not land, "
+                               "so no failing test was planted"))
+            else:
+                code, output = _run_own_suite(task, probed)
+                (probed / "own-tests.log").write_text(output)
+                if code == 1:
+                    checks.append(("PASS", control_red,
+                                   "exit 1 -- it ran, and failed, which is what a red is"))
+                elif code == 0:
+                    checks.append(("FAIL", control_red,
+                                   "exit 0 -- the suite passed with a failing test planted, so "
+                                   "it cannot see a red"))
+                elif code in (126, 127):
+                    checks.append(("FAIL", control_red,
+                                   f"exit {code} -- the test command could not be run at all in "
+                                   "the probed tree"))
+                else:
+                    checks.append(("FAIL", control_red,
+                                   f"exit {code} -- nothing ran for a planted failing test: the "
+                                   "runner misreports a red as a build error"))
+
     print()
     for verdict, name, detail in checks:
         print(f"  {verdict:4}  {name}   ({detail})")
@@ -379,7 +430,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print("UNVERIFIED: not every control has been run, so this task is not trusted yet.")
         return 2
     _record(args, task=task.name, verdict="VERIFIED")
-    print("VERIFIED: the oracle fails where it must, and passes where it must.")
+    # Say how much was actually proven. A task with no sabotage recipe is not a task with a
+    # runner that lies -- it is a task whose runner nobody has asked yet.
+    ran = [c for c in checks if c[0] == "PASS"]
+    absent = [c for c in checks if c[0] == "INFO" and "did not run" in c[2]]
+    note = f"{len(ran)} controls ran"
+    if absent:
+        note += f"; {len(absent)} did not: {absent[0][1]} ({absent[0][2]})"
+    print(f"VERIFIED: the oracle fails where it must, and passes where it must.  ({note})")
     return 0
 
 
