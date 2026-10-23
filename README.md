@@ -631,14 +631,15 @@ runs the full one. Deliberate bypass: `--no-verify`.
 
 | stage | ~cost | the claim it keeps honest |
 |---|---|---|
-| `tree` | 0.1 s | the tree is source: no tracked bytecode, no staged-check residue inside a task (this repo lost 1.28 GB to that), no untracked files. `CI_REQUIRE_CLEAN=1`, which `pre-push` exports, also refuses uncommitted edits to tracked files. |
-| `tests` | 1.3 s | the suite passes — and Ninny's **own** exit-code contract is applied to Ninny: `0` ran and passed, `1` ran and failed, `2` nothing ran. `python3 -m unittest` prints `NO TESTS RAN` and **exits 0**, so a suite that quietly stopped being collected would otherwise read as green. |
-| `stdlib` | 1.6 s | every module under `ninny/` imports with no site-packages, and the suite runs under `python3 -S` too. This is the stage that fails if a third-party import ever appears. |
-| `tasks` | 55 s | every task and example still **verifies**: the oracle RED on the stub tree, GREEN on the answer key. `bits` (CMake + GoogleTest) and `roman-cli` are most of the cost. |
+| `tree` | 0.0 s | the tree is source: no tracked bytecode, no staged-check residue inside a task (this repo lost 1.28 GB to that), no untracked files. `CI_REQUIRE_CLEAN=1`, which `pre-push` exports, also refuses uncommitted edits to tracked files. |
+| `tests` | 0.5 s | the suite passes — and Ninny's **own** exit-code contract is applied to Ninny: `0` ran and passed, `1` ran and failed, `2` nothing ran. `python3 -m unittest` prints `NO TESTS RAN` and **exits 0**, so a suite that quietly stopped being collected would otherwise read as green. |
+| `stdlib` | 0.6 s | every module under `ninny/` imports with no site-packages, and the suite runs under `python3 -S` too. This is the stage that fails if a third-party import ever appears. |
+| `tasks` | 20 s | every task and example still **verifies**: the oracle RED on the stub tree, GREEN on the answer key. `bits` (CMake + GoogleTest) and `roman-cli` dominate, and a first run on a cold build cache costs ~55 s — that first number is a measurement of the cache, not of the gate. |
 
-Tiers: `fast` = `tree tests stdlib` (~1.5 s, for the commit hook); `full` = all four (~57 s,
-for `push`, a hand run, and the publish path). `kit-ci --list` prints the same thing from the
-same parse the run uses.
+Costs are warm; a cold first run roughly triples the cheap stages and the `tasks` one. Tiers:
+`fast` = `tree tests stdlib` (~1 s, for the commit hook); `full` = all four (~21 s warm, ~57 s
+cold, for `push`, a hand run, and the publish path). `kit-ci --list` prints the stage list from
+the same parse the run uses.
 
 Two things worth knowing before you trust a green:
 

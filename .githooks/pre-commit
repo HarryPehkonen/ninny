@@ -17,6 +17,13 @@
 # Deliberate bypass when you need one:  git commit --no-verify
 set -uo pipefail
 
+# A hook INHERITS the environment of whatever fired it, so the tree rule belongs to the tier
+# and is stated here rather than inherited: the commit tier is never a clean-tree tier, because
+# staging the work IS the state a commit is made from. Measured 2026-10-23: with
+# CI_REQUIRE_CLEAN=1 left exported in a shell (from a publish run), the next `git commit` had
+# its tree stage refuse the very file it was committing.
+unset CI_REQUIRE_CLEAN
+
 root=$(git rev-parse --show-toplevel) || exit 1
 
 if [ -x "$root/scripts/gate.sh" ]; then
