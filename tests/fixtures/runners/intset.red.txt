@@ -1,0 +1,39 @@
+# task:   intset
+# state:  red
+# rc:     1
+# what this state is: one planted test that cannot pass
+# ---------------------------------------- transcript follows
+   Compiling intset v0.1.0 (/tmp/runner-capture/intset/red/tree)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.03s
+     Running unittests src/lib.rs (target/debug/deps/intset-fc4405114cdcc3f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/intset-019bf1a1f17b57c7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/own/main.rs (target/debug/deps/own-69c8e904fcdd36af)
+
+running 1 test
+test p ... FAILED
+
+failures:
+
+---- p stdout ----
+
+thread 'p' panicked at tests/own/main.rs:2:10:
+assertion failed: 1 == 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    p
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test own`

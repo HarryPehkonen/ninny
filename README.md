@@ -484,7 +484,9 @@ Day one, in this order:
 3. **The instrument**: what `run_tests` runs (`test_cmd`), and a `tests/own/README.md`
    telling the agent how its suite is executed and what the exit codes mean. Add it to
    `protected_globs`, and hash it in `oracle/frozen.sha256` — the manifest key refuses the
-   edit, the hash proves whether it happened anyway.
+   edit, the hash proves whether it happened anyway. You can write the script by hand, or
+   declare a `[runner]` table and let Ninny render it — see [`docs/RUNNERS.md`](docs/RUNNERS.md)
+   for the schema, six worked configs, and the 15-minute recipe for a new toolchain.
 4. **`oracle/`**, outside the tree, with `oracle_cmd`. This is your real test suite plus
    anything the agent must not see.
 5. **`fixed/`** — a copy of `tree/` with the reference implementation dropped in. Then

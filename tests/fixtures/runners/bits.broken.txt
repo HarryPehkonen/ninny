@@ -1,0 +1,10 @@
+# task:   bits
+# state:  broken
+# rc:     2
+# what this state is: a suite that does not compile
+# ---------------------------------------- transcript follows
+the build FAILED -- nothing ran:
+/tmp/runner-capture/bits/broken/tree/tests/own/probe_test.cpp:2:18: error: expected ‘;’ before ‘is’
+gmake[2]: *** [CMakeFiles/own_probe.dir/build.make:79: CMakeFiles/own_probe.dir/tests/own/probe_test.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:87: CMakeFiles/own_probe.dir/all] Error 2
+gmake: *** [Makefile:101: all] Error 2

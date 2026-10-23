@@ -1,0 +1,14 @@
+# task:   bits
+# state:  green
+# rc:     0
+# what this state is: one planted test that passes
+# ---------------------------------------- transcript follows
+Internal ctest changing into directory: /tmp/runner-capture/bits/green/tree/.ninny-build
+Test project /tmp/runner-capture/bits/green/tree/.ninny-build
+    Start 1: P.P
+1/1 Test #1: P.P ..............................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.00 sec
+NINNY_TESTS: 1

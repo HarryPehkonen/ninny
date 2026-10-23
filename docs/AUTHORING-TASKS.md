@@ -62,6 +62,26 @@ reports its evidence differently**:
 | cargo | a failing test -- and a compile error, both as **101** | `test result: ok. 0 passed` |
 | shell (nasm task) | a script exiting 1 | `make` failing, or a script exiting 2 |
 
+### Declaring the adapter instead of writing it
+
+The six adapters in this repo used to be hand-written -- 41 to 72 lines each, three to five
+hand-rolled `exit 2` guards each -- and every defect of the 2026-10-23 campaign lived in that
+layer. A task can now declare its adapter in `task.toml` and let Ninny render the script:
+
+```toml
+[runner]
+about = "Rust / cargo. tests/own/main.rs is the integration target Cargo discovers."
+run = "cargo test --offline --color never"
+build_fail = "^error\\[E[0-9]+\\]:|^error: could not compile|^error: expected "
+sum = "^test result: .* ([0-9]+) passed;"
+```
+
+`ninny runner --task tasks/<name> --write` renders `tools/run_own_tests.sh` into **both** `tree/`
+and `fixed/`; `--check` fails when either differs from the config. See
+[`RUNNERS.md`](RUNNERS.md) for the schema, the six configs, the recorded transcripts that justify
+each rule, and the 15-minute recipe for a project Ninny has never seen. A task without a
+`[runner]` table keeps its hand-written script.
+
 Two traps are worth their own headings.
 
 **Node counts the FILE as a test.** A test file containing no `test()` at all reports

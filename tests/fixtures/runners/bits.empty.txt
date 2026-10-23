@@ -1,0 +1,9 @@
+# task:   bits
+# state:  empty
+# rc:     2
+# what this state is: the tree as shipped: no tests
+# ---------------------------------------- transcript follows
+Internal ctest changing into directory: /tmp/runner-capture/bits/empty/tree/.ninny-build
+Test project /tmp/runner-capture/bits/empty/tree/.ninny-build
+No tests were found!!!
+ctest found no tests at all -- a build that succeeds is not a suite that asserts

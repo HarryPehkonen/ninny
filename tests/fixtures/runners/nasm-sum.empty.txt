@@ -1,0 +1,7 @@
+# task:   nasm-sum
+# state:  empty
+# rc:     2
+# what this state is: the tree as shipped: no tests
+# ---------------------------------------- transcript follows
+no tests/own/*.sh yet -- nothing to run.
+Write one case that fails because the behaviour is not there, then run it.

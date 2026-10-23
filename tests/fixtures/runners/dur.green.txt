@@ -1,0 +1,22 @@
+# task:   dur
+# state:  green
+# rc:     0
+# what this state is: one planted test that passes
+# ---------------------------------------- transcript follows
+TAP version 13
+# Subtest: p
+ok 1 - p
+  ---
+  duration_ms: 1.084179
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 102.287201
+NINNY_TESTS: 1

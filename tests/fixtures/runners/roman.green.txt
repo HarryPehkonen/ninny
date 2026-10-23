@@ -1,0 +1,11 @@
+# task:   roman
+# state:  green
+# rc:     0
+# what this state is: one planted test that passes
+# ---------------------------------------- transcript follows
+test_p (test_probe.P.test_p) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK

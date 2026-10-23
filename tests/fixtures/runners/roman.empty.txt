@@ -1,0 +1,13 @@
+# task:   roman
+# state:  empty
+# rc:     2
+# what this state is: the tree as shipped: no tests
+# ---------------------------------------- transcript follows
+
+----------------------------------------------------------------------
+Ran 0 tests in 0.000s
+
+NO TESTS RAN
+
+FAIL: no tests were found under tests/own/ -- this counts as a failure,
+      not as a pass. Write a test first.

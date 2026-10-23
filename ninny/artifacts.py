@@ -30,13 +30,14 @@ SKIP_PARTS = {
     ".mypy_cache",
     ".ruff_cache",
     "build",       # cmake, make
+    ".ninny-build",  # the adapter's own build dir for the CMake tasks
     "target",      # cargo
     "node_modules",  # npm
     "dist",
     ".venv",
     "venv",
 }
-SKIP_SUFFIXES = (".pyc", ".pyo", ".o", ".obj", ".rlib", ".rmeta")
+SKIP_SUFFIXES = (".pyc", ".pyo", ".o", ".obj", ".rlib", ".rmeta", ".log")
 
 
 def is_ignored(path: str | Path) -> bool:

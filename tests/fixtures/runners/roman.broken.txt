@@ -1,0 +1,27 @@
+# task:   roman
+# state:  broken
+# rc:     1
+# what this state is: a suite that does not import
+# ---------------------------------------- transcript follows
+test_probe (unittest.loader._FailedTest.test_probe) ... ERROR
+
+======================================================================
+ERROR: test_probe (unittest.loader._FailedTest.test_probe)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_probe
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/unittest/loader.py", line 396, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "/usr/lib/python3.13/unittest/loader.py", line 339, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "/tmp/runner-capture/roman/broken/tree/tests/own/test_probe.py", line 3
+    class P(unittest.TestCase:
+                             ^
+SyntaxError: invalid syntax
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

@@ -52,5 +52,32 @@ if [ "${CI_REQUIRE_CLEAN:-0}" = "1" ]; then
     fi
 fi
 
+# 5. Every task's adapter is the one its config renders. A hand-edited runner and a config
+#    nobody re-rendered look identical until one of them lies to the harness, and the failure
+#    would be blamed on the task. The claim is "the file on disk is what task.toml says".
+drift=$(python3 - <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, ".")
+from ninny.config import load_task
+from ninny.runner import drift
+bad = []
+for task_dir in sorted(p for p in Path("tasks").iterdir() if p.is_dir()):
+    try:
+        task = load_task(task_dir)
+        ok, note = drift(task.root, task.meta)
+    except Exception as exc:
+        bad.append(f"{task_dir.name}: {exc}")
+        continue
+    if not ok:
+        bad.append(f"{task_dir.name}: {note}")
+print("\n".join(bad))
+PY
+)
+if [ -n "$drift" ]; then
+    printf '%s\n' "$drift" >&2
+    say_fail "task adapter(s) differ from their [runner] config; run: ninny runner --task <dir> --write"
+fi
+
 [ "$fail" -eq 0 ] || exit 1
 echo "tree ok: no tracked bytecode, no check residue, no untracked files$([ "${CI_REQUIRE_CLEAN:-0}" = "1" ] && printf ', tree clean')"

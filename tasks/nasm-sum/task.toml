@@ -27,3 +27,14 @@ preflight = ["nasm -v", "ld --version", "make --version"]
 step_limit = 35
 timeout_s = 120
 test_timeout_s = 120
+
+[runner]
+about = 'x86-64 assembly / make, with bash case scripts. Every tests/own/*.sh is run.'
+note = '''Each case script prints "ok <what>" or "not ok <what>" and exits 0 (all passed), 1 (any
+failed) or 2+ (could not run). The build is make; a build failure is exit 2. The loop keeps the
+WORST exit code, because the last script is not the verdict.'''
+require = 'tests/own/*.sh'
+build = 'make'
+run = 'worst=0; for t in tests/own/*.sh; do echo "--- $t"; r=$(bash "$t" 2>&1); code=$?; printf "%s\n" "$r"; [ "$code" -gt "$worst" ] && worst=$code; done; exit $worst'
+count = ['^ok ', '^not ok ']
+rc_unrunnable = 2

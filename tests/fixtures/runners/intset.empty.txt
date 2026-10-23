@@ -1,0 +1,8 @@
+# task:   intset
+# state:  empty
+# rc:     2
+# what this state is: the tree as shipped: no tests
+# ---------------------------------------- transcript follows
+no tests/own/main.rs and no #[test] in src/lib.rs -- nothing to run yet.
+Cargo discovers tests/own/main.rs as this crate's integration target: a sibling .rs
+file is only compiled if main.rs declares it with `mod`.

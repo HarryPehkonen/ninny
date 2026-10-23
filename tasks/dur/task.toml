@@ -31,3 +31,13 @@ sandbox_binds = ["$HOME/.hermes/node"]
 step_limit = 30
 timeout_s = 120
 test_timeout_s = 180
+
+[runner]
+about = 'Node / node --test. Your suite is every tests/own/*.test.js.'
+note = '''The summary cannot be taken at face value. Measured against Node 20 and 26: a file whose
+cases all ran contributes its cases, while a file with no cases contributes ITSELF, as an entry
+named by its path. Those are subtracted, and a run that still has no cases is exit 2.'''
+require = 'tests/own/*.test.js'
+run = 'node --test --test-reporter=tap tests/own/'
+sum = '^# tests ([0-9]+)$'
+count_minus = '^(not )?ok [0-9]+ - .*(/|\.js)$'

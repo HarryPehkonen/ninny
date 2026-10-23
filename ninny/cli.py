@@ -441,7 +441,67 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------- runner
+def cmd_runner(args: argparse.Namespace) -> int:
+    """A task's adapter, from its config: print it, write it, or check the one on disk.
+
+    The adapter is the only part of Ninny that has to know a language: it turns a toolchain's
+    output into the 0/1/2 contract. Six of them were hand-written, 41-72 lines each, and every
+    defect of the 2026-10-23 campaign lived in that layer -- so it became a nine-key config
+    (`ninny/runner.py`) rendered into the tree. Rendered, not interpreted: the file stays real,
+    the agent still reads it, the gate checks it against its config, and `test_cmd` is unchanged.
+    """
+    from .runner import config_for, drift, render, rendered_path
+
+    task = load_task(_task_path(args.task))
+    config = config_for(task.meta)
+    if config is None:
+        print(f"ninny runner: {task.name} declares no [runner] table -- it brings its own adapter")
+        return 0
+    if args.check:
+        ok, note = drift(task.root, task.meta)
+        print(f"  {'ok  ' if ok else 'FAIL'}  {task.name}: {note}")
+        _record(args, task=task.name, verdict="RUNNER-OK" if ok else "RUNNER-DRIFT")
+        return 0 if ok else 1
+    script = render(config)
+    if args.write:
+        from .runner import rendered_paths
+
+        for target in rendered_paths(task.root, task.meta):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(script)
+            target.chmod(0o755)
+            print(f"wrote {target}  ({len(script.splitlines())} lines, rendered from [runner])")
+        return 0
+    print(script, end="")
+    return 0
+
+
 # --------------------------------------------------------------------- doctor
+def _task_tools(task_root: Path) -> list[str]:
+    """The executables a task actually asks for: its preflight, and its adapter's own commands.
+
+    Doctor used to name a fixed list of C++ tools, which is the one place the harness knew a
+    language. A task declares what it needs; this reads that instead.
+    """
+    task = load_task(task_root)
+    tools: list[str] = []
+    for entry in task.meta.get("preflight", []) or []:
+        tools.append(str(entry).split()[0])
+    table = task.meta.get("runner") or {}
+    for key in ("build", "run"):
+        command = str(table.get(key) or "").strip()
+        if not command:
+            continue
+        first = command.split(";")[0].split("&&")[0].strip().split()[0]
+        # A leading VAR=value is a shell assignment, and ./x is the task's own built artefact:
+        # neither is a tool this machine must have before the task can run.
+        if "=" in first or first.startswith((".", "/", "$")):
+            continue
+        tools.append(first)
+    return [tool for tool in dict.fromkeys(tools) if tool]
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"ninny {__version__}  (a fork of {UPSTREAM} -- {UPSTREAM_URL})")
     print(f"python {sys.version.split()[0]} at {sys.executable}")
@@ -459,8 +519,21 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     pricing = Pricing(base_url, api_key, fetch=True)
     catalog = pricing._catalog_models()
     print(f"  catalogue: {len(catalog)} models" if catalog else "  catalogue: unavailable")
-    for tool in ("g++", "clang++", "cmake", "ninja", "make", "git"):
+    for tool in ("python3", "git"):
         print(f"  tool {tool}: {shutil.which(tool) or 'MISSING'}")
+    roots: list[Path] = []
+    if getattr(args, "task", None):
+        roots = [_task_path(args.task)]
+    elif Path("tasks").is_dir():
+        roots = sorted(p for p in Path("tasks").iterdir() if p.is_dir())
+    for root in roots:
+        try:
+            tools = _task_tools(root)
+        except Exception as exc:  # a task this machine cannot even read is worth saying
+            print(f"  task {root.name}: unreadable ({exc})")
+            continue
+        state = ", ".join(f"{tool} {'ok' if shutil.which(tool) else 'MISSING'}" for tool in tools)
+        print(f"  task {root.name} needs: {state or 'nothing declared'}")
     return 0
 
 
@@ -514,6 +587,8 @@ def _third_party_imports() -> list[str]:
             if isinstance(node, ast.Import):
                 names = [alias.name.split(".")[0] for alias in node.names]
             elif isinstance(node, ast.ImportFrom):
+                if node.level:  # a relative import: `from .runner import ...` is ours
+                    continue
                 names = [(node.module or "").split(".")[0]]
             else:
                 continue
@@ -613,7 +688,16 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--out", help="where to stage the checks (default: $TMPDIR/ninny-checks/<task>)")
     verify.set_defaults(func=cmd_verify)
 
+    runner = sub.add_parser("runner", help="a task's adapter, rendered from its [runner] config")
+    runner.add_argument("--task", help="task directory (contains task.toml); default ./.ninny")
+    runner.add_argument("--write", action="store_true",
+                        help="write the rendered adapter into the tree")
+    runner.add_argument("--check", action="store_true",
+                        help="fail when the adapter on disk differs from the config")
+    runner.set_defaults(func=cmd_runner)
+
     doctor = sub.add_parser("doctor", help="what this machine can do")
+    doctor.add_argument("--task", help="report the tools one task needs; default: every task here")
     doctor.add_argument("--provider")
     doctor.add_argument("--base-url")
     doctor.add_argument("--bwrap-path")
@@ -622,7 +706,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # One flag on every subcommand, spelled once. A harness that writes into your home
     # directory had better have an off switch.
-    for subparser in (run, check, verify, doctor):
+    for subparser in (run, check, verify, doctor, runner):
         subparser.add_argument("--no-log", action="store_true",
                                help="no transcript log and no history line for this invocation")
     return parser

@@ -30,3 +30,15 @@ preflight = ["python3 -V"]
 step_limit = 25
 timeout_s = 60
 test_timeout_s = 120
+
+# The adapter, as a config. `ninny runner --task tasks/roman` prints what this renders;
+# `--write` writes it; `--check` fails when tree/tools/run_own_tests.sh differs from it.
+[runner]
+about = 'Python / unittest. Your suite is every tests/own/test*.py.'
+note = '''discover -s tests/own -t tests/own is deliberate: with -t . the suite is unimportable until
+package markers exist, so a missing __init__.py used to look like a failing test.
+A suite that does not even import prints no summary line, so the count is zero and that is
+exit 2 -- nothing was observed.'''
+run = 'python3 -m unittest discover -s tests/own -t tests/own -v'
+build_fail = '_FailedTest|Failed to import test module|^SyntaxError|^IndentationError'
+sum = '^Ran ([0-9]+) tests?'

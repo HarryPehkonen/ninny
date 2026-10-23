@@ -377,6 +377,34 @@ cap, so the limit is no longer the binding constraint; nothing moves without a f
   a gate; both are ~15 lines on the path the phase note already travels. Honest limit on (a):
   string matching the `test_cmd` will sometimes miss a wrapped command or fire on a listing --
   it is a recorder, so a miss costs fidelity, not correctness.
-- **One shared runner convention** — four hand-rolled runners each re-implemented count
-  parsing and the anti-vacuous guard, and each copy had its own bug. A single helper would
-  remove the duplication and the bug class.
+## The adapter layer: six copies of one bug class (2026-10-23)
+
+**Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)
+rendered into the tree by `ninny/runner.py`, checked against the config by the gate. The four
+lessons below are what the conversion itself measured.
+
+**The layer nobody checked was the adapter.** Six scripts, 41-72 lines, 3-5 hand-rolled guards
+each, no two alike -- and every defect of the campaign lived there, not in the harness: a task
+that refused its own required edit, a red reported as "nothing ran" because a guard matched
+Cargo's `error: test failed`, a README telling agents to write files Cargo never compiles, an
+empty frozen manifest that still printed "every frozen file is unchanged". The loop was
+language-blind; the layer beneath it was six copies of the same guessing game. Replacing the
+guesses with four declared answers (build, run, count, failure) removed the class.
+
+**The answer key carries the instrument too.** Rendering the adapter into `tree/` and not into
+`fixed/` turns a hash-manifested runner into "the oracle is GREEN fails" -- the task looks
+unsolvable when the answer key is merely stale. Render both, always; `ninny runner --write` now
+does, and the drift check inspects both.
+
+**Quote the directory, not the glob.** `shlex.quote("tests/own/*.cpp")` produces a literal path,
+so the `require` guard fails on every run and every task reports "nothing to run yet" as exit 2.
+The third control caught it on four tasks at once -- which is what it is for. Quote the head of
+the path and leave the pattern to expand.
+
+**A tool's "Ran 1 test" can be its own fiction.** `unittest` reports an unimportable module as
+one synthetic `_FailedTest`, so a suite that never compiled answers 1 (a red) without a guard --
+exactly the false red the contract exists to prevent. The hand-written `roman` adapter had this
+bug; the rendered one declares `build_fail` and answers 2. The transcript that proves it is in
+`tests/fixtures/runners/roman.broken.txt`.
+
+## Open, deliberately not done

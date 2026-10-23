@@ -1,0 +1,17 @@
+# task:   roman-cli
+# state:  red
+# rc:     1
+# what this state is: one planted test that cannot pass
+# ---------------------------------------- transcript follows
+[ 25%] Building CXX object CMakeFiles/romanx_lib.dir/src/romanx.cpp.o
+[ 50%] Linking CXX static library libromanx_lib.a
+[ 50%] Built target romanx_lib
+[ 75%] Building CXX object CMakeFiles/own_tests.dir/tests/own/probe_test.cpp.o
+[100%] Linking CXX executable own_tests
+[100%] Built target own_tests
+FAIL P  (/tmp/runner-capture/roman-cli/red/tree/tests/own/probe_test.cpp:2)
+    expected 1 == 2
+      actual:   1
+      expected: 2
+PROBE: 1 checked, 1 failed
+PROBE FAILED

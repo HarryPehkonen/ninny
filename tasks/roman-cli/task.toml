@@ -34,3 +34,14 @@ preflight = ["g++ --version", "cmake --version"]
 step_limit = 40
 timeout_s = 120
 test_timeout_s = 300
+
+[runner]
+about = 'C++ / CMake, one own_tests target built from every tests/own/*.cpp.'
+note = '''The frozen CMakeLists.txt compiles every tests/own/*.cpp together with every src/*.cpp into
+one target, so a new case is a new file and nothing else. The harness prints
+"<label>: N checked, M failed" whatever label the author chose, and "0 checked, 0 failed" is a
+suite that asserted nothing -- exit 2, not a pass.'''
+require = 'tests/own/*.cpp'
+build = 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --target own_tests'
+run = './build/own_tests'
+sum = '.*: ([0-9]+) checked,'

@@ -1,0 +1,20 @@
+# task:   roman-cli
+# state:  broken
+# rc:     2
+# what this state is: a suite that does not compile
+# ---------------------------------------- transcript follows
+[ 25%] Building CXX object CMakeFiles/romanx_lib.dir/src/romanx.cpp.o
+[ 50%] Linking CXX static library libromanx_lib.a
+[ 50%] Built target romanx_lib
+[ 75%] Building CXX object CMakeFiles/own_tests.dir/tests/own/probe_test.cpp.o
+/tmp/runner-capture/roman-cli/broken/tree/tests/own/probe_test.cpp: In function ‘void frozen_case_P()’:
+/tmp/runner-capture/roman-cli/broken/tree/tests/own/probe_test.cpp:2:11: error: invalid use of ‘this’ in non-member function
+    2 | TEST(P) { this is not c++ }
+      |           ^~~~
+gmake[3]: *** [CMakeFiles/own_tests.dir/build.make:79: CMakeFiles/own_tests.dir/tests/own/probe_test.cpp.o] Error 1
+gmake[2]: *** [CMakeFiles/Makefile2:157: CMakeFiles/own_tests.dir/all] Error 2
+gmake[1]: *** [CMakeFiles/Makefile2:164: CMakeFiles/own_tests.dir/rule] Error 2
+gmake: *** [Makefile:151: own_tests] Error 2
+
+BUILD FAILED -- the suite did not compile, so nothing ran and nothing was observed.
+A build error is not a RED, and exit code 2 is how this script says so.

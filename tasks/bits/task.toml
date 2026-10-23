@@ -28,3 +28,13 @@ preflight = ["cmake --version", "g++ --version", "ctest --version"]
 step_limit = 40
 timeout_s = 180
 test_timeout_s = 300
+
+[runner]
+about = 'C++ / CMake + GoogleTest, run by ctest. Every target registered in CMakeLists.txt.'
+note = '''A gtest file that is not listed in CMakeLists.txt is never compiled and never run, so adding
+a test is two steps: the file, and its lines below the marker. ctest exits 8 for BOTH "some tests
+failed" and "No tests were found", so the count is what tells them apart -- and a count of zero
+is exit 2.'''
+build = 'cmake -S . -B .ninny-build -DCMAKE_BUILD_TYPE=Debug && cmake --build .ninny-build -j 4'
+run = 'ctest --test-dir .ninny-build --output-on-failure'
+sum = ['All tests passed \(([0-9]+) tests?\)', 'out of ([0-9]+)']

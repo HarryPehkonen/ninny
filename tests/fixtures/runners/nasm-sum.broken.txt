@@ -1,0 +1,14 @@
+# task:   nasm-sum
+# state:  broken
+# rc:     2
+# what this state is: a test script that could not run at all
+# ---------------------------------------- transcript follows
+mkdir -p build
+nasm -f elf64 -o build/sum.o src/sum.asm
+ld -e _start -o build/sum build/sum.o
+--- tests/own/probe.sh
+
+
+OWN: 0 checked, 0 failed
+NINNY_TESTS: 0
+a test script could not run at all -- nothing it meant to check was observed

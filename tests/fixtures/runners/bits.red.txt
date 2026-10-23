@@ -1,0 +1,40 @@
+# task:   bits
+# state:  red
+# rc:     1
+# what this state is: one planted test that cannot pass
+# ---------------------------------------- transcript follows
+Internal ctest changing into directory: /tmp/runner-capture/bits/red/tree/.ninny-build
+Test project /tmp/runner-capture/bits/red/tree/.ninny-build
+    Start 1: P.P
+1/1 Test #1: P.P ..............................***Failed    0.00 sec
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = P.P
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from P
+[ RUN      ] P.P
+/tmp/runner-capture/bits/red/tree/tests/own/probe_test.cpp:2: Failure
+Expected equality of these values:
+  1
+  2
+
+[  FAILED  ] P.P (0 ms)
+[----------] 1 test from P (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] P.P
+
+ 1 FAILED TEST
+
+
+0% tests passed, 1 tests failed out of 1
+
+Total Test time (real) =   0.00 sec
+
+The following tests FAILED:
+	  1 - P.P (Failed)
+Errors while running CTest
+NINNY_TESTS: 1

@@ -1,0 +1,40 @@
+# task:   dur
+# state:  red
+# rc:     1
+# what this state is: one planted test that cannot pass
+# ---------------------------------------- transcript follows
+TAP version 13
+# Subtest: p
+not ok 1 - p
+  ---
+  duration_ms: 2.067746
+  type: 'test'
+  location: '/tmp/runner-capture/dur/red/tree/tests/own/probe.test.js:3:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/runner-capture/dur/red/tree/tests/own/probe.test.js:3:26)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.start (node:internal/test_runner/test:1262:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 110.23693
+NINNY_TESTS: 1

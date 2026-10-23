@@ -1,0 +1,13 @@
+# task:   nasm-sum
+# state:  red
+# rc:     1
+# what this state is: one planted case that fails
+# ---------------------------------------- transcript follows
+mkdir -p build
+nasm -f elf64 -o build/sum.o src/sum.asm
+ld -e _start -o build/sum build/sum.o
+--- tests/own/probe.sh
+not ok p
+
+OWN: 1 checked, 1 failed
+NINNY_TESTS: 1

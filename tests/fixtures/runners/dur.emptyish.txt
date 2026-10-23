@@ -1,0 +1,23 @@
+# task:   dur
+# state:  emptyish
+# rc:     2
+# what this state is: a test FILE with no cases (the count_minus wart)
+# ---------------------------------------- transcript follows
+TAP version 13
+# Subtest: tests/own/probe.test.js
+ok 1 - tests/own/probe.test.js
+  ---
+  duration_ms: 48.577933
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 74.27706
+NINNY_TESTS: 0
+the suite ran no test cases at all -- a file that loads is not a suite that asserts
