@@ -14,3 +14,12 @@ dist/
 *.egg-info/
 .venv/
 venv/
+
+# Test-run residue
+.pytest_cache/
+*.log
+
+# Local-only tasks: they live on disk, but they are not published and not tracked.
+# A fresh clone has no way to fetch them, so the public history simply does not know them.
+tasks/cron/
+tasks/ninny-gate/
