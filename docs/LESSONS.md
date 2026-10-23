@@ -239,6 +239,59 @@ a3      24  $0.0114  no-red            --                3          9     13   P
   task ships for exactly that. Looking for a documentation gap, the arms did not show one. The
   gaps they showed are signal gaps.
 
+## The first cross-task sweep -- 2026-10-23
+
+3 arms on each of the 6 published tasks, cheap model, bwrap, `--tdd request`, each task's
+OWN step limit (overriding `--steps` would hide whether the limits bind). 61 minutes,
+**$0.2398**, 18 runs + 18 checks:
+
+```
+task       steps/limit          verdict(s)          acceptance   cost
+roman      7-11  / 25          red-first x3        3/3 pass     0.0092
+dur        12-21 / 30          red-first x3        3/3 pass     0.0487
+intset     35-35 / 35 ALL      no-red x3           1 pass 2 rej 0.0939
+nasm-sum   11-17 / 35          red-first x3        3/3 pass     0.0221
+bits       16-23 / 40          red-first x2, no-red 3/3 pass    0.0311
+roman-cli  11-21 / 40          red-first x3        3/3 pass     0.0348
+```
+
+- **A second published task is broken in the bits class: `tasks/intset` cannot bank a red.**
+  Its runner decides "nothing ran" with `grep -qE "^error(\[E[0-9]+\])?:|..."`, and cargo
+  prints a line that STARTS with `error:` when a test fails -- `error: test failed, to rerun
+  pass \`--test own\``. So a genuine red is reported as exit 2. Measured: mutate the answer
+  key (`value > hi` -> `value >= hi`, still compiles), run the task's own runner -- 20 tests
+  ran, 3 failed, and the runner answered
+  `BUILD FAILED -- the suite did not compile, so nothing ran`, **exit 2**. Under `--tdd
+  enforce` that task is unsolvable: no red can ever be banked, so the source never unlocks.
+  The three `no-red` verdicts in the table are the instrument's fault, not the model's.
+- **The blind spot is now n=2, and it has a name: `verify-task` grades the ORACLE, never the
+  task's own runner.** Both defects lived in the agent-facing instrument -- `bits` refused the
+  edit the task required, `intset` misreports its own exit code -- and both passed every
+  static control. A third control is the obvious next step: sabotage the answer key, require
+  the task's own `test_cmd` to answer exit 1, and require a deliberate compile break to answer
+  exit 2.
+- **Shelled suites are systemic: 17 of 18 arms ran the suite through `bash` at least once.**
+  4 of 18 are recorded `no-red`. `red_step` therefore describes the model's action choice at
+  least as much as its process -- which is why the recorder proposed below is now evidence-backed
+  at n=18 rather than a nicety.
+- **The action timeout fires on a real task.** `bits-s1` was killed at step 13 at Ninny's own
+  180 s limit; with this morning's a3 that is 2 of 6 bits arms. A cold CMake + GoogleTest build
+  does not fit in 180 s here. The task's `timeout_s` should be raised, and the observation
+  should say the harness killed it rather than say nothing.
+- **The difficulty spread is now measured, and it is one task deep.** Four tasks
+  (roman, dur, nasm-sum, roman-cli) are 12/12 submitted, 12/12 accepted, red at step 4-5 in
+  7-21 steps: a reliable floor that discriminates nothing. `bits` sits above them. `intset` is
+  the only task that produced failures -- 3/3 hit the step limit and 2/3 were rejected -- and
+  its failures are at least partly the runner bug, so it must be re-measured after the fix.
+  **The next task to author should be at intset's level or harder, not roman-shaped.**
+- **When the instrument contradicts the model, the model investigates the instrument.**
+  `intset-s1` spent its last three steps proving the false positive by simulating the guard in
+  a scratch directory, and reached the right conclusion. `intset-s2` grepped the whole
+  filesystem (`grep -rl "run_own_tests\|RED observation\|banked" /`) looking for the harness's
+  source. Both are wasted steps that exist because the feedback was wrong -- and both are also
+  evidence that the model is not the thing that failed here.
+- 0 bypasses were recorded across all 18 arms, and no arm modified a protected file.
+
 ## Open, deliberately not done
 
 - **Version stamp for frozen files** — distinguish "task updated" from "submission edited".
