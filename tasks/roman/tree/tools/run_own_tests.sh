@@ -34,7 +34,7 @@ fi
 # No summary line at all means the suite never got as far as running -- an import or
 # collection error. That is not a test failure either, and calling it one would let a
 # broken suite masquerade as a RED observation.
-if ! printf '%s\n' "$output" | grep -qE '^Ran [0-9]+ tests?'; then
+if ! printf '%s\n' "$output" | grep -qE '^Ran [1-9][0-9]* tests?'; then
   echo
   echo "the suite did not run: no test summary was printed, so nothing was observed."
   echo "Fix the suite until it runs, then read its failure."

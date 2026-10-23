@@ -1,0 +1,33 @@
+# The second shipped example task, and the C++ one: a Roman numeral command line tool.
+#
+# It exists because the Python example cannot show two things. First, that the format is
+# not Python-shaped: here the deliverable is a compiled binary with an exit-code contract,
+# and the frozen harness is a C++ header. Second, that "a red has to be a test that ran"
+# is a contract the TASK implements -- src/romanx.cpp is a stub that COMPILES, so a
+# first-run failure is a test that ran and failed rather than a build error.
+#
+# Private like every other scored task, and shipped as an example because its answer key
+# is in the tree: nobody should score a model on it.
+name = "roman-cli"
+spec_file = "SPEC.md"
+tree = "tree"
+fixed_tree = "fixed"
+
+# The acceptance corpus lives outside the tree, deliberately, and the oracle command runs
+# with cwd inside the staging directory where this directory has been copied to
+# "oracle" -- which is why the key below has to name it.
+oracle = "oracle"
+oracle_cmd = "bash oracle/accept.sh"
+
+# The agent's own loop. Exit 0 ran and passed, 1 ran and failed, 2 could not run.
+test_cmd = "bash tools/run_own_tests.sh"
+test_globs = ["tests/own/**"]
+src_globs = ["src/**"]
+# src/main.cpp and CMakeLists.txt are frozen: they sit in src_globs so the diff shows
+# them and in protected_globs so a write to them is refused rather than counted as work.
+protected_globs = ["include/**", "tests/harness.hpp", "tools/**", "src/main.cpp", "CMakeLists.txt"]
+# Both must work INSIDE the sandbox, or a run is not scored.
+preflight = ["g++ --version", "cmake --version"]
+step_limit = 40
+timeout_s = 120
+test_timeout_s = 300
