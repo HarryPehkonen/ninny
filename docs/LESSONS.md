@@ -341,6 +341,29 @@ is proved in both directions says nothing about the `test_cmd` the model actuall
 `test_cmd` that misreports its own exit code costs the model its entire red record -- which is
 the number the whole project is built on.
 
+### The re-measure, once the instrument told the truth -- 2026-10-23
+
+Three arms on `tasks/intset`, same model, same sandbox, same mode, after the runner fix. The
+pre-fix arms in the table above are the control:
+
+```
+             before the fix (s1-s3)      after (r1-r3)
+recorded     no-red x3                   red-first x3
+red_step     none -- no red was banked   10, 16, 10
+steps        35, 35, 35 (the limit)      23, 35, 22
+acceptance   1 of 3 passed               3 of 3 passed
+cost/arm     $0.0313                     $0.0152
+```
+
+**The fix did not make the record honest at the cost of the result; it made the task cheaper and
+solvable.** Steps fell by a third and the cost by half, because the arms stopped spending their
+last steps proving the instrument was lying. `intset-s1` had done exactly that, correctly, and
+without its diagnosis a reader would have recorded "a model that could not finish the task".
+Three arms at ~1.5 cents now bank a real red at step 10-16 with a first test at step 3.
+
+**The 35-step limit is not raised.** Two arms finished in 22-23 steps and the third passed at the
+cap, so the limit is no longer the binding constraint; nothing moves without a failing case.
+
 ## Open, deliberately not done
 
 - **Version stamp for frozen files** — distinguish "task updated" from "submission edited".
