@@ -107,6 +107,9 @@ litellm` also costs 2.7 s before any work happens. Dropping it dropped all of th
 # 0. prove the task grades the way it must, before spending anything on it
 python3 -m ninny verify-task --task tasks/roman
 
+# the same, from a project whose fixtures live in ./.ninny -- no flag at all
+cd myproject && python3 -m ninny verify-task
+
 # 1. see what this machine can do
 python3 -m ninny doctor
 
@@ -501,6 +504,28 @@ What this costs you, honestly:
 - Runs and logs stay outside the repo (`runs/`, `~/.local/state/ninny/logs`), so adopting
   Ninny adds nothing to your checkout — not even a `.gitignore` line, unless you keep the
   fixtures in the same repository.
+
+**Where the fixtures live is a real choice, and `--task` defaults to the first one:**
+
+- `./.ninny/` — the convention. `ninny run` and `ninny verify-task` need no flag from
+  inside the project. They are then inside your repository, so commit them or add a
+  `.gitignore` line.
+- anywhere else — `--task ../ninnyspec`, or `--task fixtures/myproject`. Nothing is added
+  to the checkout and the fixtures stay out of its history.
+
+Either way, whether the answer key is genuinely out of the agent's reach is a property of
+the **sandbox**, not of the path. Measured with `Sandbox.hides(oracle, workdir)`, the value
+the guard reads:
+
+| `--sandbox` | `hides(oracle)` | what happens |
+|---|---|---|
+| `bwrap` | `True` | the oracle is not in the sandbox at all |
+| `none` | `None` — "cannot tell" | the run proceeds under the `NO SANDBOX` banner |
+
+So `--sandbox none` does not refuse: `None` is not `False`, and the guard only refuses a
+sandbox that positively reports the oracle as readable (that is when you need
+`--allow-oracle-visible`). If you want the answer key to be unreachable rather than merely
+unattributed, sandbox the run.
 
 A runnable instance of exactly this layout ships in
 [`examples/existing-project/`](examples/existing-project/): an inline `test_cmd`, a

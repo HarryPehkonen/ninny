@@ -25,6 +25,9 @@ ninny verify-task --task examples/existing-project
 #   PASS  oracle is GREEN on the fixed tree  (exit 0)
 ```
 
+Copy the whole directory to `./.ninny/` inside a project and the flag disappears:
+`cd myproject && ninny verify-task` finds it, because `--task` defaults to `./.ninny`.
+
 Measured on the three trees (the inline command, run by hand):
 
 | tree | exit | `NINNY_TESTS` | what it means |

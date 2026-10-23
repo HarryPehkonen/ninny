@@ -1,9 +1,11 @@
 """The command line.
 
-    ninny run         --task TASK --model MODEL [options]   one model, one task
-    ninny check       --task TASK --tree TREE               run the oracle, outside the tree
-    ninny verify-task --task TASK [--fixed TREE]            prove the task grades correctly
-    ninny doctor                                            what this machine can do
+    ninny run         [--task TASK] --model MODEL [options]  one model, one task
+    ninny check       [--task TASK] --tree TREE              run the oracle, outside the tree
+    ninny verify-task [--task TASK] [--fixed TREE]           prove the task grades correctly
+    ninny doctor                                             what this machine can do
+
+`--task` defaults to `./.ninny`, so a project that keeps its fixtures there needs no flag.
 
 Nothing here runs the oracle as part of a run. Deciding whether a submission is
 correct is the keeper's job and is done by hand, per run: an evaluation whose
@@ -55,8 +57,28 @@ def resolve_prompt_mode(tdd: str, prompt: str) -> str:
     return "enforce" if tdd == "request" else tdd
 
 
+DEFAULT_TASK_DIR = ".ninny"
+
+
+def _task_path(raw: str | None) -> Path:
+    """`--task`, or the convention directory when the flag is omitted.
+
+    A convention, not magic: the resolved path is echoed in the plan line before anything
+    is spent, and a missing `.ninny` names itself instead of failing further in.
+    """
+    if raw:
+        return Path(raw).expanduser()
+    default = Path(DEFAULT_TASK_DIR)
+    if not (default / "task.toml").is_file():
+        raise ConfigError(
+            f"no {DEFAULT_TASK_DIR}/task.toml in {Path.cwd()} "
+            f"(that is the default when --task is omitted); pass --task PATH"
+        )
+    return default
+
+
 def cmd_run(args: argparse.Namespace) -> int:
-    task = load_task(args.task)
+    task = load_task(_task_path(args.task))
     base_url, api_key, wire = resolve_endpoint(args)
     logs.register_secret(api_key)  # the process holding the key writes the log
     pricing = Pricing(base_url, api_key, price_file=args.price_file, fetch=not args.no_price_fetch)
@@ -250,7 +272,7 @@ def _run_own_suite(task, work: Path) -> tuple[int, str]:
 
 # ---------------------------------------------------------------------- check
 def cmd_check(args: argparse.Namespace) -> int:
-    task = load_task(args.task)
+    task = load_task(_task_path(args.task))
     tree = Path(args.tree).expanduser().resolve()
     if not tree.is_dir():
         print(f"ninny: {tree} is not a directory", file=sys.stderr)
@@ -278,7 +300,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     stub. An oracle that never passes cannot tell you the task is solvable at all.
     A task that has not passed both is untrusted, and says so.
     """
-    task = load_task(args.task)
+    task = load_task(_task_path(args.task))
     base = Path(args.out).expanduser() if args.out else _default_check_base(task)
 
     fixed: Path | None = None
@@ -479,7 +501,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     run = sub.add_parser("run", help="one model, one task")
-    run.add_argument("--task", required=True, help="task directory (contains task.toml)")
+    run.add_argument("--task", help="task directory (contains task.toml); default ./.ninny")
     run.add_argument("--model", required=True, help="model id as the endpoint spells it")
     run.add_argument("--provider", help=f"one of {', '.join(sorted(PROVIDERS))}")
     run.add_argument("--base-url", help="any OpenAI-compatible endpoint; overrides --provider")
@@ -518,18 +540,18 @@ def build_parser() -> argparse.ArgumentParser:
     run.set_defaults(func=cmd_run)
 
     check = sub.add_parser("check", help="run the task's oracle on a submission, outside the tree")
-    check.add_argument("--task", required=True)
+    check.add_argument("--task", help="task directory (contains task.toml); default ./.ninny")
     check.add_argument("--tree", required=True, help="the submission to judge")
-    check.add_argument("--out", help="where to stage the check (default: <task>/checks)")
+    check.add_argument("--out", help="where to stage the check (default: $TMPDIR/ninny-checks/<task>)")
     check.set_defaults(func=cmd_check)
 
     verify = sub.add_parser(
         "verify-task",
         help="prove a task's oracle fails where it must and passes where it must",
     )
-    verify.add_argument("--task", required=True)
+    verify.add_argument("--task", help="task directory (contains task.toml); default ./.ninny")
     verify.add_argument("--fixed", help="a tree the task is known to be solvable on (the GREEN control)")
-    verify.add_argument("--out", help="where to stage the checks (default: <task>/checks)")
+    verify.add_argument("--out", help="where to stage the checks (default: $TMPDIR/ninny-checks/<task>)")
     verify.set_defaults(func=cmd_verify)
 
     doctor = sub.add_parser("doctor", help="what this machine can do")
