@@ -70,9 +70,13 @@ class Sandbox:
 class BwrapSandbox(Sandbox):
     name = "bwrap"
 
-    def __init__(self, binary: str, share_net: bool = False):
+    def __init__(self, binary: str, share_net: bool = False, binds: list[str] | tuple[str, ...] = ()):
         self.binary = binary
         self.share_net = share_net
+        # Extra paths this task's toolchain needs, exposed read-only at the same location.
+        # Without them a task whose interpreter lives under a home directory cannot run at
+        # all, and the refusal looks like the model's fault.
+        self.binds = [str(path) for path in binds if path]
 
     def wrap(self, command: str, workdir: Path) -> list[str]:
         tree = str(workdir)
@@ -81,6 +85,8 @@ class BwrapSandbox(Sandbox):
             args.append("--share-net")
         for src, dst in _RO_BINDS:
             args += ["--ro-bind", src, dst]
+        for path in self.binds:
+            args += ["--ro-bind", path, path]
         for src, dst in _SYMLINKS:
             args += ["--symlink", src, dst]
         args += [
@@ -94,6 +100,16 @@ class BwrapSandbox(Sandbox):
         ]
         return args
 
+    def describe(self) -> str:
+        """One line naming what the run can see. Printed at the start of every run."""
+        line = (
+            f"SANDBOXED with bubblewrap ({self.binary}); "
+            + ("network shared" if self.share_net else "network unshared")
+        )
+        if self.binds:
+            line += "; extra read-only binds: " + ", ".join(self.binds)
+        return line + "."
+
     def plan(self, workdir: Path) -> tuple[bool, str]:
         if not os.access(self.binary, os.X_OK):
             return False, f"{self.binary} is not executable"
@@ -104,10 +120,7 @@ class BwrapSandbox(Sandbox):
         if done.returncode != 0 or "ninny-sandbox-ok" not in (done.stdout or ""):
             detail = (done.stderr or done.stdout or "").strip()[:300]
             return False, f"sandbox started but the probe failed ({detail})"
-        return True, (
-            f"SANDBOXED with bubblewrap ({self.binary}); "
-            + ("network shared" if self.share_net else "network unshared") + "."
-        )
+        return True, self.describe()
 
     def check(self, commands: list[str], workdir: Path) -> list[tuple[str, bool, str]]:
         """The task's own preflight commands, run INSIDE the sandbox.
@@ -171,7 +184,12 @@ def find_bwrap(explicit: str | None = None) -> str | None:
     return None
 
 
-def build_sandbox(kind: str, bwrap_path: str | None = None, share_net: bool = False) -> Sandbox:
+def build_sandbox(
+    kind: str,
+    bwrap_path: str | None = None,
+    share_net: bool = False,
+    binds: list[str] | tuple[str, ...] = (),
+) -> Sandbox:
     if kind == "none":
         return Sandbox()
     if kind != "bwrap":
@@ -185,4 +203,4 @@ def build_sandbox(kind: str, bwrap_path: str | None = None, share_net: bool = Fa
             "    apt-get download bubblewrap && dpkg -x bubblewrap_*.deb root\n"
             "    ninny ... --bwrap-path ./root/usr/bin/bwrap"
         )
-    return BwrapSandbox(binary, share_net=share_net)
+    return BwrapSandbox(binary, share_net=share_net, binds=binds)

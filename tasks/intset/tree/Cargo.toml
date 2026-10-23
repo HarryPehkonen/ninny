@@ -1,0 +1,18 @@
+# FROZEN -- do not modify. The acceptance corpus builds against this crate.
+#
+# No dependencies, and none may be added: the suite runs offline inside a sandbox with no
+# registry, so a third-party crate cannot even be fetched.
+[package]
+name = "intset"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[[bin]]
+name = "intset"
+path = "src/main.rs"
+
+[lib]
+name = "intset"
+path = "src/lib.rs"

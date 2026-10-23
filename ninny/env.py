@@ -28,14 +28,39 @@ PASSED_EXIT = 0
 FAILED_EXIT = 1
 NOTHING_RAN_EXIT = 2
 
+# And this is the second half of the contract, the one a code cannot carry: how many cases
+# the runner actually counted. A task's own runner prints one line when it can:
+#
+#     NINNY_TESTS: 12
+#
+# It is optional and it is never compared against anything -- the number of cases a task
+# ought to have is not something the harness knows. It exists because a suite can get
+# SMALLER without anything failing: a build file that stops compiling a test source, a
+# discovery pattern that matches one file instead of six, a test file that loads and
+# asserts nothing. All of those exit 0. The count is the only evidence, and in the
+# observation text alone it is only visible to someone reading prose carefully.
+TEST_COUNT_PREFIX = "NINNY_TESTS:"
+_TEST_COUNT_LINE = re.compile(
+    r"^" + re.escape(TEST_COUNT_PREFIX) + r"[ \t]*([0-9]+)[ \t]*$", re.MULTILINE
+)
 
-def describe_test_exit(code: int | None, command: str) -> str:
+
+def reported_test_count(output: str) -> int | None:
+    """The case count a runner reported, or None when it did not report one."""
+    matches = _TEST_COUNT_LINE.findall(output or "")
+    return int(matches[-1]) if matches else None
+
+
+def describe_test_exit(code: int | None, command: str, tests: int | None = None) -> str:
     """The sentence the model reads about a test run, in the code's own terms.
 
     The words have to match the number, because this sentence is what the model uses to
     decide what to do next. A live C++ arm was told "tests FAILED, as they must before the
     implementation exists" on a `cc1plus: fatal error`, where nothing had run at all --
     so the harness misled the model and then banked that run as its RED.
+
+    The count rides along when the runner reported one, so a model whose suite shrank sees
+    the number in the same sentence that tells it the tests failed.
     """
     if code == PASSED_EXIT:
         verdict = "tests PASSED"
@@ -45,7 +70,9 @@ def describe_test_exit(code: int | None, command: str) -> str:
         verdict = "tests FAILED, as they must before the implementation exists"
     else:
         verdict = "outcome unclear from the code alone"
-    return f"ran: {command}  ->  exit {code}  ({verdict})"
+    counted = f"; {tests} cases" if tests is not None else ""
+    return f"ran: {command}  ->  exit {code}  ({verdict}{counted})"
+
 
 # Conservative detector for a shell command that writes into the source tree.
 # It exists so an enforcement bypass is at least visible; it is not a guarantee.
@@ -67,6 +94,7 @@ class Observation:
     exit_code: int | None
     output: str
     note: str = ""
+    tests: int | None = None
 
     def render(self) -> str:
         head = self.note or ("ok" if self.ok else "failed")
@@ -159,7 +187,8 @@ class Environment:
         if not self.test_cmd:
             raise ActionError("this task declares no test_cmd, so there is nothing to run")
         observation = self.bash(self.test_cmd, timeout=timeout or self.test_timeout)
-        observation.note = describe_test_exit(observation.exit_code, self.test_cmd)
+        observation.tests = reported_test_count(observation.output)
+        observation.note = describe_test_exit(observation.exit_code, self.test_cmd, observation.tests)
         return observation
 
     # ------------------------------------------------------------------- helpers

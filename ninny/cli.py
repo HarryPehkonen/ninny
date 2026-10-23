@@ -67,7 +67,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     workdir = run_dir / "tree"
     shutil.copytree(task.tree_src, workdir, symlinks=True, dirs_exist_ok=False)
 
-    sandbox = build_sandbox(args.sandbox, args.bwrap_path, share_net=args.sandbox_net)
+    sandbox = build_sandbox(
+        args.sandbox,
+        args.bwrap_path,
+        share_net=args.sandbox_net,
+        binds=task.sandbox_binds,
+    )
     ok, note = sandbox.plan(workdir)
     print(f"ninny {__version__}: {note}")
     if not ok:
@@ -194,6 +199,27 @@ def _run_oracle(task, work: Path) -> tuple[int, str]:
     return completed.returncode, output
 
 
+# Exit codes that mean "the oracle ran and said no", and codes that mean "it never ran".
+# 2 is the contract's "could not run"; 126/127 are the shell's "not executable"/"not found".
+# Anything else non-zero is a program that ran and failed. The distinction matters because
+# "the oracle is RED on the starting tree" is a CONTROL: a 127 (a typo'd script name, a
+# missing interpreter) would otherwise count as proof that the oracle rejects a stub, when
+# in fact it never executed a line.
+_NEVER_RAN_CODES = {2, 126, 127}
+
+
+def _oracle_said_no(code: int) -> bool:
+    """True when the oracle ran and rejected the tree -- a real RED."""
+    return code != 0 and code not in _NEVER_RAN_CODES
+
+
+def _oracle_exit_note(code: int) -> str:
+    """The parenthetical that goes next to a control's verdict."""
+    if code in _NEVER_RAN_CODES:
+        return f"exit {code} -- the oracle did not run at all, so this proves nothing"
+    return f"exit {code}"
+
+
 def _run_own_suite(task, work: Path) -> tuple[int, str]:
     """The task's own test command, in a staged tree, with no sandbox.
 
@@ -273,8 +299,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
         checks.append(("FAIL", "the task declares an oracle_cmd", "no oracle_cmd in task.toml"))
     else:
         code, _ = _run_oracle(task, given)
-        if code != 0:
-            checks.append(("PASS", "oracle is RED on the given tree", f"exit {code}"))
+        if _oracle_said_no(code):
+            checks.append(("PASS", "oracle is RED on the given tree", _oracle_exit_note(code)))
+        elif code != 0:
+            # The oracle never ran. That is a broken oracle, not a passing control, and the
+            # difference decides whether the task gets a model's money spent on it.
+            checks.append(("FAIL", "oracle is RED on the given tree", _oracle_exit_note(code)))
         else:
             checks.append(
                 ("FAIL", "oracle is RED on the given tree",
@@ -289,7 +319,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
         good = _stage(task, fixed, base, "fixed")
         code, _ = _run_oracle(task, good)
         if code == 0:
-            checks.append(("PASS", "oracle is GREEN on the fixed tree", f"exit {code}"))
+            checks.append(("PASS", "oracle is GREEN on the fixed tree", _oracle_exit_note(code)))
+        elif not _oracle_said_no(code):
+            checks.append(("FAIL", "oracle is GREEN on the fixed tree", _oracle_exit_note(code)))
         else:
             checks.append(
                 ("FAIL", "oracle is GREEN on the fixed tree",

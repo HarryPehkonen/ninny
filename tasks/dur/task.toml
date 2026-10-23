@@ -1,0 +1,30 @@
+# A Node CLI task: the roman recipe in a third language, with a third test harness.
+#
+# What it is here to find out: whether Ninny's exit-code contract survives a runner it did
+# not grow up with. `node --test` exits 0/1 and prints "# tests N", so the vacuous case
+# ("# tests 0", exit 0) is a pass the runner has to catch itself -- the same hole the C++
+# and Python runners had, in a third harness.
+name = "dur"
+spec_file = "SPEC.md"
+tree = "tree"
+fixed_tree = "fixed"
+
+oracle = "oracle"
+oracle_cmd = "bash oracle/accept.sh"
+
+# The agent's own loop. Exit 0 ran and passed, 1 ran and failed, 2 could not run.
+test_cmd = "bash tools/run_own_tests.sh"
+test_globs = ["tests/own/**"]
+src_globs = ["src/**"]
+# src/cli.js is frozen: in src_globs so the diff shows it, in protected_globs so a write
+# to it is refused rather than counted as the implementation.
+protected_globs = ["tools/**", "tests/own/README.md", "src/cli.js"]
+preflight = ["node --version"]
+# node lives under the home directory, which the sandbox hides. Declared as $HOME/... so
+# this manifest is not tied to one machine; config.py expands it when the task is read.
+# Bind the whole prefix, not just bin/: a single directory leaves node's own libraries
+# behind and the failure looks like a broken install rather than a missing bind.
+sandbox_binds = ["$HOME/.hermes/node"]
+step_limit = 30
+timeout_s = 120
+test_timeout_s = 180

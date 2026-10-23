@@ -1,0 +1,25 @@
+# A C++ header-only library task: CMake + GoogleTest, and no binary at all.
+#
+# What it is here to find out: whether the contract survives a suite whose discovery is
+# CONFIGURATION rather than convention. A gtest file that is not added to CMakeLists.txt is
+# never built, so the suite silently gets smaller -- the case the NINNY_TESTS count exists
+# for. CMake also reports a build failure and a failing test as different things, and ctest
+# exits 8 for "some tests failed" but also for "No tests were found".
+name = "bits"
+spec_file = "SPEC.md"
+tree = "tree"
+oracle = "oracle"
+fixed_tree = "fixed"
+# The command runs with cwd set to the staging directory, where the oracle has been
+# copied to ./oracle -- so the path is relative to THAT, not to the oracle directory.
+oracle_cmd = "bash oracle/accept.sh"
+
+test_cmd = "bash tools/run_own_tests.sh"
+test_globs = ["tests/own/**"]
+src_globs = ["include/**", "src/**"]
+protected_globs = ["CMakeLists.txt", "tools/**", "tests/own/README.md"]
+
+preflight = ["cmake --version", "g++ --version", "ctest --version"]
+step_limit = 40
+timeout_s = 180
+test_timeout_s = 300

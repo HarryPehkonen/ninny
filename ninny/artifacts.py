@@ -19,8 +19,24 @@ from pathlib import Path
 # moves to the red step, and a textbook red-first run is reported as "red-after-code".
 # The same rule covers compiler output: the C++ task's test command builds the suite into
 # build/ before it runs it, and a linked binary is not something an arm did.
-SKIP_PARTS = {"__pycache__", ".git", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build"}
-SKIP_SUFFIXES = (".pyc", ".pyo", ".o", ".obj")
+#
+# One entry per ecosystem's build directory, because they are all the same thing: what a
+# BUILD produced, not what the arm wrote. `target` was missing until a Rust arm put 61
+# build files into a diff of a 17-line change.
+SKIP_PARTS = {
+    "__pycache__",
+    ".git",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "build",       # cmake, make
+    "target",      # cargo
+    "node_modules",  # npm
+    "dist",
+    ".venv",
+    "venv",
+}
+SKIP_SUFFIXES = (".pyc", ".pyo", ".o", ".obj", ".rlib", ".rmeta")
 
 
 def is_ignored(path: str | Path) -> bool:

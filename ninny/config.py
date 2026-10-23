@@ -15,6 +15,7 @@ first" meaningless. `load_task` refuses a task that gets this wrong.
 
 from __future__ import annotations
 
+import os
 import tomllib
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
@@ -52,6 +53,11 @@ class Task:
     timeout_s: int
     test_timeout_s: int
     protected_globs: list[str] = field(default_factory=list)
+    # Extra paths this task's toolchain needs, exposed read-only at the same location.
+    # A task whose interpreter or compiler lives outside /usr cannot be scored at all,
+    # and the failure looks like the model's. Declaring it here means the sandbox plan
+    # can print what the run was able to see.
+    sandbox_binds: list[str] = field(default_factory=list)
     meta: dict = field(default_factory=dict)
 
     def is_test_path(self, rel: str) -> bool:
@@ -111,6 +117,13 @@ def load_task(path: str | Path) -> Task:
         step_limit=int(data.get("step_limit", 40)),
         timeout_s=int(data.get("timeout_s", 120)),
         test_timeout_s=int(data.get("test_timeout_s", 120)),
+        # Expanded on the HOST, at load time. The sandbox sets HOME=/tmp, so a manifest
+        # written as "$HOME/.hermes/node" has to resolve before the sandbox is entered --
+        # resolving it later would point at /tmp/.hermes/node and fail confusingly.
+        sandbox_binds=[
+            os.path.expandvars(os.path.expanduser(str(p)))
+            for p in data.get("sandbox_binds", [])
+        ],
         meta={k: v for k, v in data.items() if k not in _KNOWN_KEYS},
     )
 
@@ -133,5 +146,5 @@ def _assert_oracle_outside_tree(oracle_dir: Path, tree_src: Path) -> None:
 _KNOWN_KEYS = {
     "name", "spec_file", "tree", "oracle", "test_cmd", "oracle_cmd",
     "test_globs", "src_globs", "preflight", "step_limit", "timeout_s",
-    "test_timeout_s", "protected_globs",
+    "test_timeout_s", "protected_globs", "sandbox_binds",
 }

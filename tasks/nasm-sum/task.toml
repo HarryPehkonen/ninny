@@ -1,0 +1,26 @@
+# An assembly task: nasm + ld + make, and a shell test harness the task defines.
+#
+# What it is here to find out: whether the contract survives a build tool that is a raw
+# assembler and a linker, and a suite written as shell scripts. There is no test framework
+# to lean on in assembly, so the task defines the harness -- TAP-ish ok/not ok lines, and
+# the same 0/1/2 exit contract the agent's own runner reports, one level down.
+#
+# It also asks whether a run can be measured when the model flounders: this is the hardest
+# task in the set, and a StepLimit that is reported honestly is a result, not a failure of
+# the harness.
+name = "nasm-sum"
+spec_file = "SPEC.md"
+tree = "tree"
+fixed_tree = "fixed"
+
+oracle = "oracle"
+oracle_cmd = "bash oracle/accept.sh"
+
+test_cmd = "bash tools/run_own_tests.sh"
+test_globs = ["tests/own/**"]
+src_globs = ["src/**"]
+protected_globs = ["Makefile", "tools/**", "tests/own/README.md"]
+preflight = ["nasm -v", "ld --version", "make --version"]
+step_limit = 35
+timeout_s = 120
+test_timeout_s = 120

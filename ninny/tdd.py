@@ -42,6 +42,10 @@ class TDDState:
     red_step: int | None = None
     red_exit: int | None = None
     test_runs: list[list[int]] = field(default_factory=list)
+    # The counts the runner reported, as [step, count], for the runs that reported one.
+    # Kept beside test_runs rather than inside it so the documented shape of test_runs
+    # (step, exit code) does not change under anyone reading the record.
+    test_counts: list[list[int]] = field(default_factory=list)
     refusals: list[list] = field(default_factory=list)
     bypass_detected: list[list] = field(default_factory=list)
     submit_refusals: int = 0
@@ -83,6 +87,9 @@ class TDDState:
             "red_exit": self.red_exit,
             "red_before_code": self.red_before_code,
             "test_runs": self.test_runs,
+            # The case counts the runner reported, [step, count] per run that reported one.
+            # A suite that shrank asserts less without failing, and this is the only trace.
+            "test_counts": self.test_counts,
             "refusals": self.refusals,
             "bypass_detected": self.bypass_detected,
             "submit_refusals": self.submit_refusals,
@@ -256,6 +263,11 @@ class TDDPolicy:
         elif action.name == "run_tests":
             code = observation.exit_code if observation.exit_code is not None else -1
             state.test_runs.append([step, code])
+            # The count, when the task's runner reported one. It is what makes a suite
+            # getting smaller visible: nothing fails, it just asserts less.
+            count = getattr(observation, "tests", None)
+            if count is not None:
+                state.test_counts.append([step, count])
             # A failing run is only a RED observation if there was a test file to
             # fail. The own-test runner fails on purpose when the suite is empty, so
             # without this a run could bank an early red_step just by running the
