@@ -202,9 +202,56 @@ Three lessons, all measured while wiring it:
   the test of whether the exit-2 note shortens the path to a legitimate red, or is just noise
   in every observation.
 
+## The bits arms -- 2026-10-23 (the first time that task was ever run)
+
+Three arms, cheap model, `--sandbox bwrap`, `--tdd request` (record only), $0.0433 total:
+
+```
+arm  steps  cost     recorded verdict  red_step  first test  first src  tests  acceptance
+a1      10  $0.0139  no-red            --                3          5     12   PASSED 5/5
+a2      33  $0.0180  red-first         7                 4          8     24   PASSED 5/5
+a3      24  $0.0114  no-red            --                3          9     13   PASSED 5/5
+```
+
+- **The task is solvable, and the protected-globs fix is what made it so.** 3/3 passed the
+  acceptance corpus, each after editing `CMakeLists.txt` -- the edit the manifest used to
+  refuse. This is the whole argument for fixing a manifest you have not run: the same task,
+  one line different, goes from impossible to a 1.4-cent solve.
+- **The frozen region survived all three, including a wholesale rewrite.** One arm wrote a
+  brand-new `CMakeLists.txt` (1516 bytes against the original 1615) and still reproduced the
+  region above the marker byte for byte. The file's own header instruction was sufficient --
+  and the new frozen-region check passed on all three (5 checked, 0 failed, which includes it).
+  Self-description inside the tree works; that is the accessibility finding, and it is positive.
+- **The record lost a genuine red in two of the three arms.** a1 and a3 both ran the suite
+  through `bash`, saw the runner print `EXIT=1` before their first source write, and are
+  recorded `no-red`, because `red_step` comes only from the `run_tests` action. Both also wrote
+  `; echo "EXIT=$?"` -- they were reading the exit code, just not through the action. So a
+  verdict describes the observations the harness could see: quote these as "recorded no-red",
+  never as "did not test first", and never as evidence about the model's process.
+- **Ninny's own 180 s action timeout looked like nothing at all.** a3's first suite run died at
+  the timeout (exit 124, the runner never printed a verdict), and the model retried with
+  `timeout 170 bash tools/run_own_tests.sh` -- a cold CMake + GoogleTest build of 13 targets
+  does not fit in 180 s on this machine. A weaker arm would read that observation as "my tests
+  failed", or as a broken task. The model adapted; the harness said nothing about what had
+  happened.
+- **Entry cost measured:** 10-33 steps and 1.1-1.8 cents to a passing submission, and one arm
+  opened by reading `tests/own/README.md` and `tools/run_own_tests.sh` -- the two files the
+  task ships for exactly that. Looking for a documentation gap, the arms did not show one. The
+  gaps they showed are signal gaps.
+
 ## Open, deliberately not done
 
 - **Version stamp for frozen files** — distinguish "task updated" from "submission edited".
+- **Make the two silent events visible, using the mechanism the phases already use.** Both
+  were measured on the bits arms, and both are the same class of thing: an event whose meaning
+  to the harness is never said back to the model. (a) The task's own test command appearing
+  inside a `bash` action -- record it (`shelled_test_run`, with steps) and say so in the
+  observation, because the harness cannot see that red and the model cannot tell that its
+  process record just went blank. (b) An action killed by Ninny's own timeout -- say so, since
+  the observation is otherwise indistinguishable from a suite that reported nothing. Neither is
+  a gate; both are ~15 lines on the path the phase note already travels. Honest limit on (a):
+  string matching the `test_cmd` will sometimes miss a wrapped command or fire on a listing --
+  it is a recorder, so a miss costs fidelity, not correctness.
 - **One shared runner convention** — four hand-rolled runners each re-implemented count
   parsing and the anti-vacuous guard, and each copy had its own bug. A single helper would
   remove the duplication and the bug class.
