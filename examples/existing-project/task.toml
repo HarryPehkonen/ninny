@@ -1,0 +1,28 @@
+# fixtures-demo/task.toml -- OUTSIDE the project. Nothing is added to the project itself.
+#
+# The recipe from README "An existing project that must not gain files": the tree is a
+# snapshot of the project, test_cmd is an inline command (no runner file in the tree), and
+# the oracle lives here rather than in the checkout.
+name = "demo-project"
+spec_file = "SPEC.md"
+tree = "snapshot"
+fixed_tree = "fixed"
+oracle = "oracle"
+oracle_cmd = "bash oracle/accept.sh"
+
+# The project's own harness, with both guards inlined: nothing-ran, and the count.
+# Runs with cwd set to the run's copy of the tree, through a shell.
+test_cmd = """
+python3 -m pytest -q; rc=$?
+n=$(python3 -m pytest -q --collect-only 2>/dev/null | tail -1 | grep -oE '^[0-9]+')
+n=${n:-0}
+echo "NINNY_TESTS: $n"
+[ "$n" -gt 0 ] || exit 2
+exit $rc
+"""
+
+test_globs = ["tests/**"]
+src_globs = ["calc/**"]
+protected_globs = ["tests/**"]
+preflight = ["python3 -V"]
+step_limit = 10

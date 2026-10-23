@@ -366,7 +366,9 @@ wrong.** If the agent can read the acceptance suite it can write its own tests f
 answer key, and both "did it write tests" and "did it write them first" stop meaning
 anything. To adapt this for your own project, copy the layout above and point
 `oracle/gate.sh` at your real test suite: `ninny check` copies the submission into a scratch
-directory, runs the oracle beside it, and hands it the tree in `$NINNY_TREE`.
+directory, runs the oracle beside it, and hands it the tree in `$NINNY_TREE`. The next
+section has the two full recipes — a new project, and an existing one that must not gain
+any files at all.
 
 ### The format is not Python-shaped
 
@@ -399,6 +401,111 @@ and a recorded `test_runs` of `[[5,2],[7,1],[9,1],[11,0],[15,0]]`. It wrote its 
 fail (1), then wrote the real implementation and went green. Test-first in substance, and the
 verdict still reads `red-after-code`, because the stub is a file under `src/` and it landed one
 step before the red.
+
+## Starting a new project, or adopting an existing one
+
+Two rules decide the layout, and neither is negotiable:
+
+- **The oracle never lives inside the tree.** If the agent can read the acceptance suite it
+  can write its tests from the answer key, and *did it write tests* and *did it write them
+  first* both stop meaning anything. `ninny` refuses to load a task that gets this wrong.
+- **The starting tree is copied for every run.** Your project is never written to, so a
+  fixture can point at a real checkout without risking it.
+
+Everything else is a convention you can move.
+
+### A new project: write the spec before the code
+
+| path | why it exists |
+|---|---|
+| `SPEC.md` | the contract the model is given — the interface, the error behaviour, the exit codes, what counts as canonical. Written before any code, and frozen: it is the only thing standing between "the model solved it" and "the model solved something" |
+| `task.toml` | the declaration: which directories, what the agent's test loop is, what it may not touch |
+| `tree/` | the agent's whole world — the interface, unimplemented, plus the instrument that measures it |
+| `oracle/` | the hidden grader, and `frozen.sha256` for the instrument |
+| `fixed/` | the answer key. It is not documentation for the model; it is the control that proves the oracle can pass at all |
+
+Day one, in this order:
+
+1. **`SPEC.md`, before the code.** Then the interface it describes, unimplemented, under
+   `tree/`.
+2. **The stub must build.** Not a file that throws — a stub that runs and returns nothing.
+   That is what makes the agent's first RED *a test that ran and failed* rather than
+   `exit 2` from a compiler. In a compiled language it is not optional: a C++ task without a
+   stub produced `cc1plus: fatal error` as its "first red", where nothing ran at all.
+3. **The instrument**: what `run_tests` runs (`test_cmd`), and a `tests/own/README.md`
+   telling the agent how its suite is executed and what the exit codes mean. Add it to
+   `protected_globs`, and hash it in `oracle/frozen.sha256` — the manifest key refuses the
+   edit, the hash proves whether it happened anyway.
+4. **`oracle/`**, outside the tree, with `oracle_cmd`. This is your real test suite plus
+   anything the agent must not see.
+5. **`fixed/`** — a copy of `tree/` with the reference implementation dropped in. Then
+   `ninny verify-task --task tasks/<name>`: **RED on the stub, GREEN on `fixed/`**. A task
+   that cannot fail on the stub grades nothing; an oracle that only ever fails proves
+   nothing. This control caught nine of the ten oracle bugs found while building these
+   fixtures.
+6. Only then spend money on arms, and judge each one by hand with `ninny check`.
+
+### An existing project that must not gain files
+
+The fixtures do not have to live in the project, and `test_cmd` is a **command, not a
+file** — so nothing has to be added to the repository at all. Keep the fixture directory
+somewhere else and point it at a snapshot:
+
+```bash
+# a snapshot, not the live checkout: every arm must start from the same tree
+git -C ~/work/myproject archive HEAD | tar -x -C fixtures/myproject/snapshot
+```
+
+```toml
+# fixtures/myproject/task.toml -- outside the project, nothing added to it
+name = "myproject"
+spec_file = "SPEC.md"
+tree = "snapshot"                 # gets copied per run; the live checkout is never touched
+oracle = "oracle"                 # stays here, outside the project
+oracle_cmd = "bash oracle/accept.sh"
+
+# The project's own harness, with both guards inlined: nothing-ran, and the count.
+# test_cmd runs with cwd set to the run's copy of the tree, through a shell.
+test_cmd = """
+ctest --test-dir build --output-on-failure; rc=$?
+n=$(ctest --test-dir build -N 2>/dev/null | grep -c 'Test #')
+echo "NINNY_TESTS: $n"
+[ "$n" -gt 0 ] || exit 2
+exit $rc
+"""
+
+protected_globs = ["tests/**", "CMakeLists.txt"]   # the project's suite and its build
+src_globs = ["src/**"]
+preflight = ["cmake --version"]                    # must work inside the sandbox
+sandbox_binds = []                                 # toolchains outside /usr, e.g. ["$HOME/.hermes/node"]
+```
+
+The same shape works for any runner — run it, keep the exit code, count what it collected,
+print `NINNY_TESTS: <n>`, and `exit 2` when the count is zero. Two details, both of them
+things that bit while writing this: `grep -c` prints `0` rather than nothing, so that count
+is never empty, but a runner that prints no count line at all — pytest collecting nothing —
+needs `n=${n:-0}` first, or the guard ends up comparing an empty string. And the count only
+means something if the runner prints it on **every** run, including the failing ones.
+Without a count, "my suite quietly got smaller" has no failing signal at all.
+
+What this costs you, honestly:
+
+- **No frozen hash.** A file under `tree/` can be hashed; an inline command cannot. The
+  substitute is `protected_globs`, which *refuses* the write instead of detecting it
+  afterwards — prevention for edits made through Ninny's own action, while an edit smuggled
+  through a shell heredoc is caught later by the tree diff and recorded as `bypass_detected`.
+- **The count is only as good as your harness.** If the project's suite cannot say how many
+  tests it has, the one signal that catches a shrinking suite is gone.
+- **Test-first ordering is the weakest metric here** and is recorded, never gated. Expect
+  `red-after-code` in compiled projects where the first real test run lands after a stub.
+- Runs and logs stay outside the repo (`runs/`, `~/.local/state/ninny/logs`), so adopting
+  Ninny adds nothing to your checkout — not even a `.gitignore` line, unless you keep the
+  fixtures in the same repository.
+
+A runnable instance of exactly this layout ships in
+[`examples/existing-project/`](examples/existing-project/): an inline `test_cmd`, a
+snapshot instead of the live checkout, and an oracle outside the project.
+`ninny verify-task --task examples/existing-project` proves it in about a second.
 
 ## Sandboxing
 
