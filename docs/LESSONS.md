@@ -91,6 +91,29 @@ right and never have observed a red.
     implementation. An oracle that only ever fails proves nothing. `verify-task` requires
     both directions: RED on the stub, GREEN on the answer key.
 
+11. **A task can be unsolvable and still pass both controls.** `tasks/bits` shipped with
+    `CMakeLists.txt` in `protected_globs` -- the same file its README, the file's own header
+    and the oracle's own comment all tell the agent to edit. The gate refuses that write in
+    every mode, so a registered test could never exist, so the suite could never run, so no
+    run could ever see a red. Unsolvable. `verify-task` passed anyway, because the oracle
+    grades the *answer key*, whose CMakeLists was already correct: both controls grade the
+    ends of a task and neither one runs the middle. What would have caught it is one arm --
+    `history.tsv` has 20 rows for `bits` and every one of them is `verify-task`, zero agent
+    runs. Run every task at least once before trusting it; the answer-key control proves an
+    oracle, not a task.
+
+12. **A file's own promise is a specification, and it can be unmet.** That header said the
+    acceptance corpus "checks that everything else is unchanged"; the corpus hashed two other
+    files and skipped this one deliberately. The fix was to implement the promise -- hash the
+    region above the marker, which is the region the file says is frozen -- and then to stop
+    protecting the file, so the gate no longer refuses the edit the task requires. Teeth
+    measured: a compile flag edited above the marker gives
+    `FAIL CMakeLists.txt above the marker was edited`, and the submission is rejected, while
+    the clean answer key still verifies.
+    Known limit, recorded rather than fixed: appending *below* the marker is allowed by design
+    (the corpus appends its own target there), so a submission could silence warnings by
+    appending rather than editing. The acceptance corpus still decides the verdict.
+
 ## Lessons — about TDD enforcement and the model
 
 - **Telling the model about TDD barely changed whether it went red-first.** With the gate

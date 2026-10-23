@@ -25,6 +25,19 @@ if [ -f "$HERE/frozen.sha256" ]; then
   done < "$HERE/frozen.sha256"
 fi
 
+# 1b. The frozen region of CMakeLists.txt. It cannot be hashed whole -- adding a target per
+#     test file is the task -- so the region ends at the marker, and the file's own header is
+#     what says so. A missing marker hashes the whole file and fails with it.
+if [ -f "$HERE/frozen-cmake.sha256" ]; then
+  want=$(grep -v '^#' "$HERE/frozen-cmake.sha256" | head -1 | tr -d '[:space:]')
+  got=$(awk '/YOUR TESTS BELOW HERE/{print; exit} {print}' CMakeLists.txt | sha256sum | cut -d' ' -f1)
+  if [ "$want" = "$got" ]; then
+    pass "frozen: CMakeLists.txt above the marker"
+  else
+    fail "CMakeLists.txt above the marker was edited, or the marker removed"
+  fi
+fi
+
 # 2. The submission's own suite must build and pass. A library that only builds is a
 #    library nobody checked.
 build_dir=$TREE/.ninny-build-oracle

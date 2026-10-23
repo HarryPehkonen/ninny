@@ -1,0 +1,5 @@
+# CMakeLists.txt cannot be hashed whole: a submission has to add one target per test
+# file, and the acceptance corpus appends one of its own. The frozen region is therefore
+# everything up to and including the "YOUR TESTS BELOW HERE" marker, which is what the
+# file's own header promises is checked.
+4a0c1391d4a51aae6d13243b65cfc6e9e3fcf0e201b8149150d712e04d2dc239

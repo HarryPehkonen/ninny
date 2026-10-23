@@ -17,7 +17,9 @@ oracle_cmd = "bash oracle/accept.sh"
 test_cmd = "bash tools/run_own_tests.sh"
 test_globs = ["tests/own/**"]
 src_globs = ["include/**", "src/**"]
-protected_globs = ["CMakeLists.txt", "tools/**", "tests/own/README.md"]
+# CMakeLists.txt is NOT protected: the task is to register a target in it, and refusing
+# the write made the task unsolvable. Its frozen region is checked by the oracle instead.
+protected_globs = ["tools/**", "tests/own/README.md"]
 
 preflight = ["cmake --version", "g++ --version", "ctest --version"]
 step_limit = 40
