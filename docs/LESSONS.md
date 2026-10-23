@@ -70,8 +70,14 @@ right and never have observed a red.
 
 7. **Paths are where correctness leaks.** `oracle_cmd` runs with cwd set to the staging
    directory, so it must be `bash oracle/accept.sh`, not `bash accept.sh`. bwrap needs an
-   absolute source path. `ninny check` leaves a `checks/` copy inside the task, which then
-   accumulates gigabytes. Each cost a debugging cycle.
+   absolute source path. Each cost a debugging cycle.
+
+   The worst case was `ninny check` staging *inside* the task directory: every
+   verification copied the task, built it, and left the output behind. `tasks/intset/checks`
+   reached 69 MB per verification (956 MB with a Rust `target/`), and the repo passed 1 GB
+   of gitignored debris. Fixed: the default staging root is now
+   `$TMPDIR/ninny-checks/<task>`, and `--out` still puts it wherever you ask. A check is
+   disposable, so its scratch does not belong in the source tree.
 
 8. **Analysis scripts break on real data.** A sort key of `None` crashed the tally twice.
    Guard the fields; do not assume every JSON has every key.

@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -167,6 +168,18 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 # -------------------------------------------------------------------- staging
+def _default_check_base(task) -> Path:
+    """Where `check` and `verify-task` stage trees when no --out is given.
+
+    NOT inside the task directory. Staging there copied the task, built it, and left the
+    build output behind: verifying all eight tasks repeatedly grew the repository past
+    1 GB, and every `verify-task` added tens of megabytes of gitignored debris to a tree
+    that is meant to be source. A check is disposable, so its scratch lives in the OS
+    temp dir; pass --out when the artifacts are wanted somewhere specific.
+    """
+    return Path(tempfile.gettempdir()) / "ninny-checks" / task.name
+
+
 def _stage(task, tree: Path, base: Path, label: str = "") -> Path:
     """A submission and the oracle, side by side, outside the submission.
 
@@ -246,7 +259,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(f"ninny: task {task.name} declares no oracle_cmd", file=sys.stderr)
         return 2
 
-    base = Path(args.out).expanduser() if args.out else (Path(args.task).expanduser() / "checks")
+    base = Path(args.out).expanduser() if args.out else _default_check_base(task)
     work = _stage(task, tree, base)
     print(f"ninny check: {task.oracle_cmd}   (cwd={work}, NINNY_TREE={work / 'tree'})")
     code, output = _run_oracle(task, work)
@@ -266,7 +279,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     A task that has not passed both is untrusted, and says so.
     """
     task = load_task(args.task)
-    base = Path(args.out).expanduser() if args.out else (Path(args.task).expanduser() / "checks")
+    base = Path(args.out).expanduser() if args.out else _default_check_base(task)
 
     fixed: Path | None = None
     if args.fixed:
