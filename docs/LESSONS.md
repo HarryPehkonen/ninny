@@ -133,6 +133,31 @@ right and never have observed a red.
 - **No new tasks this cycle.** The marginal information per arm had fallen below the cost
   of authoring and grading one.
 
+## The gate — 2026-10-23
+
+Ninny had none. Ten of Harri's other repos carry a `gate.toml` for KitCI, and this was the
+eleventh: `tree tests stdlib tasks`, fast tier ~1 s on commit, full ~21 s on push. The
+`tasks` stage is the one no other repo can have — `verify-task` on every task, which is the
+repo's own two-way control run on the repo.
+
+Three lessons, all measured while wiring it:
+
+- **`python3 -m unittest discover` prints `Ran 0 tests` and `NO TESTS RAN`, and exits 0.** So
+  a suite that quietly stopped being collected reads as green — the same class as pytest's
+  exit 5 (which docsum guards with `fail_on = "exit:5"`). The stage therefore applies Ninny's
+  own contract to Ninny: 0 ran and passed, 1 ran and failed, 2 nothing ran. Both branches have
+  their own sabotage: `mv tests` aside reaches "no count line", an empty importable `tests/`
+  reaches "0 tests ran".
+- **A hook inherits the environment of whatever fired it, so it must state its own tier's
+  rule.** With `CI_REQUIRE_CLEAN=1` left exported in a shell from a publish run, the next
+  `git commit` had its tree stage refuse the very file it was committing — a commit is *made*
+  from a staged tree. `pre-commit` now unsets it. The failure was also masked by a
+  `git commit ... | tail -4`, which returns the pipe's status: capture `rc=$?` on the next
+  line.
+- **A cost quoted without its cache state is not a measurement.** The full tier measured
+  54.6 s, then 20.0 s: no ccache here, and `bits` (CMake + GoogleTest) builds cold in its
+  staging directory on the first run. The README carries both numbers, labelled.
+
 ## Open, deliberately not done
 
 - **Version stamp for frozen files** — distinguish "task updated" from "submission edited".
