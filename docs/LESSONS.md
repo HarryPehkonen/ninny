@@ -158,6 +158,27 @@ Three lessons, all measured while wiring it:
   54.6 s, then 20.0 s: no ccache here, and `bits` (CMake + GoogleTest) builds cold in its
   staging directory on the first run. The README carries both numbers, labelled.
 
+## The phases, named -- 2026-10-23
+
+- **The state carried a phase from the first day and nothing said so to the model.** `test`,
+  `impl`, `done` were in the record and invisible in the run. The fix is a vocabulary, not a
+  mechanism: one table (`PHASE_ORDER` / `PHASE_LABELS` / `PHASE_JOBS`) and three readers -- the
+  prompt, the refusal text, the observation after an action. ~40 lines, no new concepts, and
+  the internal names did not change, so no record shape moved.
+- **A note the model never reads is a comment.** The step line is operator-facing; the phase
+  had to ride on the observation itself, which is also the string the record stores -- so what
+  the record says the model was told and what it was told cannot drift apart.
+- **The interruption earns its place at exit 2.** A model that has just read `cc1plus: fatal
+  error` reads it as a failure it earned; the vocabulary names the phase, and the note says
+  what a red is not, at the moment it happens. Before this, that sentence lived only in a
+  task author's stub comment, so every task that forgot one taught the lesson badly.
+- **Vocabulary is guidance and stays unenforced.** The order of the writes is still a recorded
+  number, never a gate; the RED rule is unchanged and still lives at handback. Nothing here
+  can refuse a run that a refusal did not already refuse.
+- **Honest limit: rendered and unit-tested, not yet measured on arms.** The next C++ arms are
+  the test of whether the exit-2 note shortens the path to a legitimate red, or is just noise
+  in every observation.
+
 ## Open, deliberately not done
 
 - **Version stamp for frozen files** — distinguish "task updated" from "submission edited".

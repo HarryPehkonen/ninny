@@ -34,7 +34,7 @@ from ninny.env import Environment
 from ninny.model import PROVIDERS, ModelClient, ModelError
 from ninny.pricing import Pricing
 from ninny.sandbox import SandboxError, build_sandbox, find_bwrap
-from ninny.tdd import MODES, TDDPolicy
+from ninny.tdd import MODES, TDDPolicy, phases_line
 
 
 # ------------------------------------------------------------------------ run
@@ -147,6 +147,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"  model    {args.model}  via {base_url}  wire={wire}")
     print(f"  pricing  {pricing.describe(args.model)}")
     print(f"  tdd      {args.tdd}   steps<={steps}   workdir={workdir}")
+    print(f"  phases   {phases_line()}   (a test that never ran is not a red)")
     print(f"  run      {run_dir}")
     print()
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import platform
 
 from ninny import SUBMIT_SENTINEL, __version__
+from ninny.tdd import NOT_A_RED, phases_block
 
 SYSTEM_TEMPLATE = "You are a helpful assistant that can interact with a computer."
 
@@ -62,16 +63,16 @@ which you write them.
 """,
     "enforce": """## Testing (ENFORCED in this run)
 
-You must write a test and **see it fail** before any implementation is accepted.
-Writes into the source tree are refused until then. The sequence is:
+Three phases, in order, and the record says which one you were in when each thing
+happened:
 
-1. `write_file` a test under {test_globs}
-2. `run_tests` and read the failure it reports
-3. `write_file` the implementation
+{phases}
 
-The harness records whether a failing test was observed before the implementation.
-It cannot record what did not happen, and it watches the source tree to confirm
-the refusal was not routed around.
+You must write a test -- under {test_globs} -- and **see it fail** before any
+implementation is accepted: writes into the source tree are refused until then, and the
+harness watches the source tree to confirm the refusal was not routed around.
+
+{not_a_red}
 
 """,
     "reverse": """## Testing
@@ -79,14 +80,21 @@ the refusal was not routed around.
 Implement first if you like. Before you may submit, you must write tests for what
 you implemented and run them.
 
+{not_a_red}
+
 """,
 }
 
 
 def render_instance(task, workdir: str, tdd_mode: str, sandbox_note: str) -> str:
     tdd_block = TDD_BLOCKS.get(tdd_mode, "")
-    if "{test_globs}" in tdd_block:
-        tdd_block = tdd_block.format(test_globs=", ".join(task.test_globs))
+    # replace() rather than format(): these blocks are prose, and one stray brace in a
+    # later edit should not be able to raise at run time.
+    tdd_block = (
+        tdd_block.replace("{test_globs}", ", ".join(task.test_globs))
+        .replace("{phases}", phases_block())
+        .replace("{not_a_red}", NOT_A_RED)
+    )
     return INSTANCE_TEMPLATE.format(
         spec=task.spec.strip(),
         workdir=workdir,

@@ -271,6 +271,26 @@ its own trajectory instead of from a note somebody wrote down.
 --tdd off
 ```
 
+### The phases, named
+
+An `enforce` or `reverse` run moves through three phases, and the model is told which one it
+is in -- in the prompt, in a refusal, and in the observation that comes back after an action.
+The note goes on the observation because a note in the harness's own log is a note the model
+never reads:
+
+```
+1  RED-FIRST   write a test that RUNS and fails
+2  GREEN       implement until the suite passes
+3  HAND BACK   submit; the record must show the red before the source
+```
+
+The plan line prints the sequence before the first model call, and each step line carries the
+phase the step started in. The names live in one place -- `PHASE_ORDER`, `PHASE_LABELS`,
+`PHASE_JOBS` in `ninny/tdd.py` -- and the prompt, the refusal text and the observations are
+readers of it. Two moments earn an interruption: the phase moving, and a suite that reported
+nothing at all. The second one is the one that matters on a compiled task, where a build error
+is the commonest way to think you have gone red when nothing ran.
+
 Every run ends with a verdict:
 
 - **`red-first`** — wrote a test, ran it, saw it fail, then implemented.

@@ -19,6 +19,7 @@ from ninny import SUBMIT_SENTINEL, UPSTREAM, UPSTREAM_URL, __version__
 from ninny.actions import TOOLS, parse_reply, validate
 from ninny.artifacts import tree_digest
 from ninny.prompt import SYSTEM_TEMPLATE, format_error_message, render_instance
+from ninny.tdd import PHASE_LABELS
 
 
 @dataclass
@@ -129,7 +130,10 @@ class Agent:
             response = self.client.complete(self.messages, tools)
             result.api_calls += 1
             _merge_usage(result.usage, response.usage)
-            self.log(f"[step {step}] {response.latency_s:.1f}s  {_usage_line(response.usage)}")
+            self.log(
+                f"[step {step}] {PHASE_LABELS.get(state.phase, state.phase)}  "
+                f"{response.latency_s:.1f}s  {_usage_line(response.usage)}"
+            )
 
             actions, note = parse_reply(response)
             if not actions:
@@ -172,8 +176,15 @@ class Agent:
                 observation = self.env.execute(action)
                 self.policy.observe(action, observation, state, step)
                 self.policy.observe_tree(state, step)
-                self._record(step, action, True, observation.render(), observation.exit_code)
-                self._append_observation(use_tool_role, call_id, observation.render())
+                # What the model is told and what the record says it was told are the same
+                # string: the phase note is prepended to the observation itself, because a
+                # note in the harness's own log is a note the model never reads.
+                told = observation.render()
+                note = self.policy.note_for(action, observation, state)
+                if note:
+                    told = f"{note}\n{told}"
+                self._record(step, action, True, told, observation.exit_code)
+                self._append_observation(use_tool_role, call_id, told)
                 self.log(f"[step {step}] {action.describe()}  -> exit {observation.exit_code}")
 
                 if action.is_submit():

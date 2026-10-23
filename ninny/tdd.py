@@ -32,10 +32,57 @@ from ninny.env import FAILED_EXIT, NOTHING_RAN_EXIT, PASSED_EXIT
 MODES = ("off", "request", "enforce", "reverse")
 
 
+# The phases the run moves through, named so the MODEL is told where it is. The state has
+# carried `phase` since the beginning and never said so out loud; these are the words for it,
+# and they are the same words in the prompt, in a refusal, and in the observation after an
+# action -- one definition, three readers.
+PHASE_ORDER = ("test", "impl", "done")
+PHASE_LABELS = {"test": "RED-FIRST", "impl": "GREEN", "done": "HAND BACK"}
+PHASE_JOBS = {
+    "test": "write a test that RUNS and fails",
+    "impl": "implement until the suite passes",
+    "done": "submit; the record must show the red before the source",
+}
+# A test that never ran is not a red. A build error, an import error or an empty collection
+# is exit 2, and a model that has just read `cc1plus: fatal error` reads that as a failure it
+# earned. This sentence is the one that has to reach it, at the moment it happens.
+NOT_A_RED = (
+    "A test that never ran is not a red: a build error, an import error or a suite\n"
+    "that collects nothing is exit 2 -- nothing ran -- and the harness does not bank\n"
+    "it. Make it compile and assert something that is wrong, then run it again."
+)
+
+
+def phase_line(phase: str) -> str:
+    """`1/3 RED-FIRST -- write a test that RUNS and fails`."""
+    phase = phase if phase in PHASE_LABELS else PHASE_ORDER[0]
+    return (
+        f"{PHASE_ORDER.index(phase) + 1}/{len(PHASE_ORDER)} {PHASE_LABELS[phase]}"
+        f" -- {PHASE_JOBS[phase]}"
+    )
+
+
+def phases_line() -> str:
+    """The sequence, for the plan line a human reads before the run starts."""
+    return " -> ".join(PHASE_LABELS[p] for p in PHASE_ORDER)
+
+
+def phases_block() -> str:
+    """The sequence, for the prompt."""
+    return "\n".join(
+        f"{index}. {PHASE_LABELS[p]} -- {PHASE_JOBS[p]}"
+        for index, p in enumerate(PHASE_ORDER, 1)
+    )
+
+
 @dataclass
 class TDDState:
     mode: str
     phase: str = "test"
+    # The once-only line the model is told when the phase moves, so a phase change
+    # is never silent. Deliberately not serialised: it is a message, not a measurement
+    # (the trajectory stores the message itself).
+    phase_news: str = ""
     test_files: list[str] = field(default_factory=list)
     first_test_step: int | None = None
     first_src_step: int | None = None
@@ -183,23 +230,23 @@ class TDDPolicy:
         # write, in the test phase or after it.
         if path and self._lands_outside(path):
             state.refusals.append([step, f"outside: {path}"])
-            return self._refusal_message(path)
+            return self._refusal_message(path, phase=state.phase)
 
         if state.phase != "test":
             return ""
         if action.name == "write_file":
             if self.task.is_src_path(rel) and not state.red_ok:
                 state.refusals.append([step, rel])
-                return self._refusal_message(rel)
+                return self._refusal_message(rel, phase=state.phase)
         if action.name == "bash" and src_write_suspect and not state.red_ok:
             if rel and self.task.is_src_path(rel):
                 state.refusals.append([step, f"bash -> {src_write_suspect}"])
-                return self._refusal_message(src_write_suspect, via_shell=True)
+                return self._refusal_message(src_write_suspect, via_shell=True, phase=state.phase)
         if action.is_submit() and not state.red_ok:
             state.submit_refusals += 1
             if state.submit_refusals <= 1:
                 state.refusals.append([step, "submit"])
-                return self._refusal_message("the whole task", on_submit=True)
+                return self._refusal_message("the whole task", on_submit=True, phase=state.phase)
         return ""
 
     def gate_submit_reverse(self, state: TDDState, step: int) -> str:
@@ -234,14 +281,54 @@ class TDDPolicy:
             f"{', '.join(self.task.test_globs)}."
         )
 
-    def _refusal_message(self, rel: str, via_shell: bool = False, on_submit: bool = False) -> str:
+    def _enter(self, state: TDDState, phase: str, step: int) -> None:
+        """Move the phase, and say so once.
+
+        The news is one-shot because it is guidance rather than state: the model is told the
+        red is banked and the next phase has begun, and after that the prompt is the reminder.
+        """
+        if state.phase == phase:
+            return
+        state.phase = phase
+        if phase == "impl":
+            state.phase_news = (
+                f"Red banked at step {step} -- the suite ran and failed, which is the "
+                f"observation this gate wanted. Now {phase_line('impl')}."
+            )
+        else:
+            state.phase_news = f"Phase: {phase_line(phase)}."
+
+    def note_for(self, action, observation, state: TDDState) -> str:
+        """The one line the model is told after an action ran, or "".
+
+        Two moments earn an interruption, and they are the two ways a run goes wrong in
+        silence: the phase moved (a red was banked, so implementation is allowed now), or the
+        suite reported that NOTHING RAN. A model that has just read `cc1plus: fatal error`
+        reads exit 2 as a failure it earned; saying otherwise at that moment is the whole
+        reason for naming the phases at all.
+        """
+        if state.phase_news:
+            news, state.phase_news = state.phase_news, ""
+            return news
+        if action.name != "run_tests" or state.red_ok:
+            return ""
+        if observation.exit_code == NOTHING_RAN_EXIT:
+            return "Nothing ran (exit 2), so nothing was observed and no red was banked. " + NOT_A_RED
+        return ""
+
+    def _refusal_message(
+        self, rel: str, via_shell: bool = False, on_submit: bool = False, phase: str = "test"
+    ) -> str:
         how = "A shell command tried to write" if via_shell else "That write"
         return (
             f"Refused (test-first is enforced in this run). {how} to {rel} before any test "
             "has been seen to fail.\n"
+            f"You are in {phase_line(phase)}.\n"
             f"1. write a test under {', '.join(self.task.test_globs)} with write_file\n"
-            "2. run it with run_tests and look at the failure\n"
+            "2. run it with run_tests and look at the failure it reports\n"
             "3. then write the implementation\n"
+            + NOT_A_RED
+            + "\n"
             "This is not a hint about style: the run records whether a failing test was seen "
             "first, and it cannot be recorded if it did not happen."
         )
@@ -259,7 +346,7 @@ class TDDPolicy:
                 if state.first_src_step is None:
                     state.first_src_step = step
                 if state.red_ok:
-                    state.phase = "impl"
+                    self._enter(state, "impl", step)
         elif action.name == "run_tests":
             code = observation.exit_code if observation.exit_code is not None else -1
             state.test_runs.append([step, code])
@@ -285,9 +372,9 @@ class TDDPolicy:
                 state.red_step = step
                 state.red_exit = code
             if state.red_ok:
-                state.phase = "impl"
+                self._enter(state, "impl", step)
         elif action.is_submit():
-            state.phase = "done"
+            self._enter(state, "done", step)
 
     def observe_tree(self, state: TDDState, step: int) -> None:
         """Reconcile the record against the tree, which is the ground truth.
