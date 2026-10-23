@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# pre-commit: the FAST tier - the part of the gate that must be seconds, not minutes.
+#
+# from AI-DEV-STARTER (plunk-in kit), via docsum. Install as .githooks/pre-commit and arm it
+# once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# This hook holds the tier NAME, never a stage list: the list lives in gate.toml, so a stage
+# added there reaches both tiers without touching this file. (A hook carrying its own copy of
+# the list once ran 11 of 12 stages and printed GATE PASSED - the summary describes what ran,
+# never what was left out.)
+#
+# Nothing leaves the machine to make this work: no GitHub, no service, no account.
+#
+# Deliberate bypass when you need one:  git commit --no-verify
+set -uo pipefail
+
+root=$(git rev-parse --show-toplevel) || exit 1
+
+if [ -x "$root/scripts/gate.sh" ]; then
+    exec "$root/scripts/gate.sh" --tier fast
+fi
+
+# No gate found is a failure, not a warning: a silently unarmed gate is worse than no gate,
+# because it looks armed.
+printf 'pre-commit: no gate found. Expected %s/scripts/gate.sh.\n' "$root" >&2
+exit 1

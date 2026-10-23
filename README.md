@@ -615,17 +615,45 @@ Written down because a harness that hides its own seams is lying to you.
 - **Four actions cannot do a multi-file refactor.** Deliberate.
 - **`bwrap` is Linux-only.** Deliberate, and always optional.
 
-## Testing
+## Testing, and the gate
+
+The suite is stdlib `unittest`, and needs no site-packages to run:
 
 ```bash
-python3 -m unittest discover -s tests -t .    # 154 tests
+python3 -m unittest discover -s tests       # the whole suite
+python3 -S -m unittest discover -s tests    # and with no site-packages at all
 ```
 
-The suites that matter most are `tests/test_tdd.py`, which includes the ways the state
-machine could be fooled (a passing test is not a RED observation, a test file alone does not
-unlock the source, the instrument cannot be edited, a source change that sneaks past the
-gate is still detected), and `tests/test_logs.py`, which pins the properties a log has to
-have to be worth reading.
+`./scripts/gate.sh` is **the gate**: [kit-ci](https://github.com/HarryPehkonen/KitCI) reading
+`gate.toml`, four stages, offline, no service and no account. Arm it once per clone —
+`git config core.hooksPath .githooks` — and `git commit` runs the fast tier while `git push`
+runs the full one. Deliberate bypass: `--no-verify`.
+
+| stage | ~cost | the claim it keeps honest |
+|---|---|---|
+| `tree` | 0.1 s | the tree is source: no tracked bytecode, no staged-check residue inside a task (this repo lost 1.28 GB to that), no untracked files. `CI_REQUIRE_CLEAN=1`, which `pre-push` exports, also refuses uncommitted edits to tracked files. |
+| `tests` | 1.3 s | the suite passes — and Ninny's **own** exit-code contract is applied to Ninny: `0` ran and passed, `1` ran and failed, `2` nothing ran. `python3 -m unittest` prints `NO TESTS RAN` and **exits 0**, so a suite that quietly stopped being collected would otherwise read as green. |
+| `stdlib` | 1.6 s | every module under `ninny/` imports with no site-packages, and the suite runs under `python3 -S` too. This is the stage that fails if a third-party import ever appears. |
+| `tasks` | 55 s | every task and example still **verifies**: the oracle RED on the stub tree, GREEN on the answer key. `bits` (CMake + GoogleTest) and `roman-cli` are most of the cost. |
+
+Tiers: `fast` = `tree tests stdlib` (~1.5 s, for the commit hook); `full` = all four (~57 s,
+for `push`, a hand run, and the publish path). `kit-ci --list` prints the same thing from the
+same parse the run uses.
+
+Two things worth knowing before you trust a green:
+
+- **A fresh clone has no hooks armed.** `core.hooksPath` lives in `.git/config`, not in the
+  tree, so a clone commits and pushes unguarded while looking armed. That is why this repo's
+  publish path — a *filtered* clone, since the history holds two private tasks — runs
+  `./scripts/gate.sh` by hand before pushing rather than relying on the hook.
+- **A missing engine fails loudly**, not green: with no `kit-ci` on `PATH`, `scripts/gate.sh`
+  exits 1 and says so.
+
+The suites that matter most are `tests/test_tdd.py`, which includes the ways the state machine
+could be fooled (a passing test is not a RED observation, a test file alone does not unlock
+the source, the instrument cannot be edited, a source change that sneaks past the gate is
+still detected) — and `tests/test_logs.py`, which pins the properties a log has to have to be
+worth reading.
 
 ## Why it works this way
 

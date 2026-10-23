@@ -5,6 +5,9 @@ __pycache__/
 runs/
 tasks/*/checks/
 
+# The gate's own footprint (kit-ci stage logs).
+.ci-logs/
+
 # Packaging
 build/
 dist/

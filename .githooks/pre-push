@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# pre-push: the FULL tier - the gate, on the tree you are about to publish.
+#
+# from AI-DEV-STARTER (plunk-in kit), via docsum. Install as .githooks/pre-push and arm it
+# once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# CI_REQUIRE_CLEAN=1 is what makes the tree stage refuse uncommitted edits: every other stage
+# reads the WORKING TREE, so without it a push can publish a commit whose own code the stages
+# never saw.
+#
+# NOTE for this repo: Ninny is published by a FILTERED clone (its history holds two private
+# tasks), and a fresh clone has no hooks armed. So the publish path runs
+# `scripts/gate.sh` by hand in that clone; this hook is the belt for ordinary pushes.
+#
+# Deliberate bypass when you need one:  git push --no-verify
+set -uo pipefail
+
+root=$(git rev-parse --show-toplevel) || exit 1
+
+if [ -x "$root/scripts/gate.sh" ]; then
+    export CI_REQUIRE_CLEAN=1
+    exec "$root/scripts/gate.sh" --tier full
+fi
+
+printf 'pre-push: no gate found. Expected %s/scripts/gate.sh.\n' "$root" >&2
+exit 1

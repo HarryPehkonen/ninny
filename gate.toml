@@ -1,0 +1,44 @@
+# Ninny's gate. The POLICY is this file; the ENGINE is kit-ci, one binary per machine:
+#
+#     cmake -S ~/hermes-workspace/KitCI -B build-release -DCMAKE_BUILD_TYPE=Release
+#     cmake --build build-release && cmake --install build-release --prefix ~/.local
+#
+# One definition, three callers - by hand (scripts/gate.sh), git on commit and on push
+# (.githooks/, which NAME a tier), and a clean checkout elsewhere. Changing the gate means
+# editing this file: `kit-ci --list` and `kit-ci --graph` read the same parse the run uses.
+#
+# Every stage here is a claim Ninny makes in its own README, made checkable. Which stage
+# would fail if the claim became false is the question that put each one in:
+
+[gate]
+repo = "ninny"
+
+# ~1.5 s: the part that must be seconds, because a slow commit hook gets bypassed by habit.
+[tier.fast]
+stages = ["tree", "tests", "stdlib"]
+
+# Everything, and `tasks` is the reason: ~21 s, all of it in the last stage.
+[tier.full]
+stages = ["*"]
+
+# The claim: adopting Ninny adds nothing to your checkout - and the two residue classes that
+# actually re-grew this repo (bytecode committed by accident, staged checks left inside a
+# task tree, 1.28 GB of them) can never come back unnoticed.
+[stage.tree]
+cmd = "scripts/tree-check.sh"
+
+# The claim: the suite passes. Guarded against the vacuous pass, because `python3 -m unittest`
+# prints "NO TESTS RAN" and exits 0 - the exact failure mode Ninny exists to refuse. The
+# script enforces Ninny's own contract on Ninny: 0 ran+passed, 1 ran+failed, 2 nothing ran.
+[stage.tests]
+cmd = "scripts/run-tests.sh"
+
+# The claim in the README that every module imports with no site-packages, and the suite runs
+# under `python3 -S`. This is the stage that would fail if a third-party import appeared.
+[stage.stdlib]
+cmd = "scripts/check-stdlib.sh"
+
+# The claim no other repo can make: every task still verifies - the oracle RED on the stub
+# tree and GREEN on the answer key. This is Ninny's own two-way control, run on Ninny.
+[stage.tasks]
+cmd = "scripts/verify-tasks.sh"
