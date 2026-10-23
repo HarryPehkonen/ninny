@@ -377,6 +377,7 @@ cap, so the limit is no longer the binding constraint; nothing moves without a f
   a gate; both are ~15 lines on the path the phase note already travels. Honest limit on (a):
   string matching the `test_cmd` will sometimes miss a wrapped command or fire on a listing --
   it is a recorder, so a miss costs fidelity, not correctness.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)
@@ -407,4 +408,24 @@ exactly the false red the contract exists to prevent. The hand-written `roman` a
 bug; the rendered one declares `build_fail` and answers 2. The transcript that proves it is in
 `tests/fixtures/runners/roman.broken.txt`.
 
-## Open, deliberately not done
+## The publish ritual was the design talking (2026-10-23)
+
+**Every publish was a filtered force-push clone, and that was a symptom, not a policy.** The
+history held two tasks that must not be public (`tasks/cron`, `tasks/ninny-gate`), so the public
+repo was built by cloning this one and rewriting every commit to strip them. Rewriting changes
+hashes, so the published `main` shared no ancestry with local `master`: a plain `git push` could
+never fast-forward, `git pull` could never bring anything back, and the two drifted by whatever a
+publish run happened to include. Measured on the day it was fixed: `git remote -v` empty in the
+working clone, published tree 149 files against 238 tracked, and the published `main` an object
+this repo did not even have.
+
+**The fix is to stop tracking what must not ship, not to keep rewriting it out.** The two tasks
+became ignored (`tasks/cron/`, `tasks/ninny-gate/` in `.gitignore`): they stay on disk and in
+this working copy, and a fresh clone has no way to learn they exist. One `filter-branch` removed
+them from all 37 commits, `master` became `main`, and publishing became `git push`. A bundle of
+the pre-rewrite history sits outside the repo (`_backups/`), because a history rewrite with no
+undo is not a decision, it is a trap.
+
+**The generalisation: if publishing needs a ritual, the repo is tracking something it should not.**
+Force, filtering, and "remember to run the gate by hand" were all consequences of one directory
+tree being in the wrong place. The tell is a publish path that is not `git push`.

@@ -421,11 +421,12 @@ any files at all.
 
 ### The format is not Python-shaped
 
-The only task shipped here is `tasks/roman`, because **a benchmark whose answer key is
-public is not a benchmark**: the two harder tasks used for the measurements in this README
-(and the C++ arenas behind them) are deliberately not published, answer keys least of all.
-`tasks/roman` does ship with its answer key (`fixed/`), because it is an example rather than
-a benchmark — nobody should score a model on it and expect to learn anything.
+Six tasks ship here — `roman`, `dur`, `intset`, `nasm-sum`, `bits`, `roman-cli` — across five
+languages and four test runners, each with its oracle and its answer key (`fixed/`). They are
+**worked examples of the format**, not a benchmark: **a benchmark whose answer key is public
+is not a benchmark.** If you want to score models on one of them, keep its `oracle/` and
+`fixed/` out of your published tree — everything needed to grade lives there, and everything
+a model must not see lives there too.
 
 The same format does run other languages and other test runners. A C++ task — a cron
 expression parser with bitmask semantics, frozen headers, graded by 122 acceptance checks
@@ -692,9 +693,9 @@ the same parse the run uses.
 Two things worth knowing before you trust a green:
 
 - **A fresh clone has no hooks armed.** `core.hooksPath` lives in `.git/config`, not in the
-  tree, so a clone commits and pushes unguarded while looking armed. That is why this repo's
-  publish path — a *filtered* clone, since the history holds two private tasks — runs
-  `./scripts/gate.sh` by hand before pushing rather than relying on the hook.
+  tree, so a clone commits and pushes unguarded while looking armed. Arm it once per clone:
+  `git config core.hooksPath .githooks`. This clone is armed, so `push` runs the full gate;
+  publishing is a plain `git push`.
 - **A missing engine fails loudly**, not green: with no `kit-ci` on `PATH`, `scripts/gate.sh`
   exits 1 and says so.
 
