@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -276,15 +277,45 @@ class Agent:
         self._sealed_applied = True
         names = ", ".join(sorted(sealed))
         state.sealed_readonly = self.env.sandbox.seal_readonly(
-            [str(self.workdir / rel) for rel in sealed]
+            [str(self.workdir / rel) for rel in sealed], ancestors=self._sealed_ancestors(sealed)
         )
         if state.sealed_readonly:
-            self.log(f"[seal] read-only for the rest of the run: {names}")
+            frozen = self.env.sandbox.sealed_ancestors
+            detail = f" (ancestors frozen: {', '.join(frozen)})" if frozen else ""
+            self.log(f"[seal] read-only for the rest of the run: {names}{detail}")
         else:
             self.log(
                 f"[seal] sealed in the record but NOT enforced -- sandbox "
                 f"{self.env.sandbox.name!r} cannot make a path read-only: {names}"
             )
+
+    def _sealed_ancestors(self, sealed) -> list[str]:
+        """The directories to freeze so a sealed file cannot be renamed off its path.
+
+        Freezing the FILE is not enough. The first live sealed run renamed the whole suite
+        directory (`tests/own` -> `ownX`) and wrote a fresh suite at the same path, and a rename
+        needs write permission on the PARENT of the thing being renamed, not on the file. So the
+        parent's parent is frozen as well -- and the suite directory is re-opened writable
+        afterwards, so new test files are still allowed.
+
+        Two directories are never frozen: the working tree itself (that would freeze every
+        source write the model still has to make) and anything that holds source. A level that
+        cannot be frozen is left open on purpose, and the record still reports a broken seal.
+        """
+        root = str(self.workdir)
+        prefixes = [glob.split("**")[0].rstrip("/") for glob in self.task.src_globs]
+        out: list[str] = []
+        for rel in sealed:
+            ancestor = os.path.dirname(os.path.dirname(str(self.workdir / rel)))
+            if not ancestor or ancestor == root or ancestor in out:
+                continue
+            if any(
+                ancestor == p or ancestor.startswith(p + "/") or p.startswith(ancestor + "/")
+                for p in prefixes
+            ):
+                continue
+            out.append(ancestor)
+        return out
 
     def _record(self, step: int, action, allowed: bool, observation: str, exit_code) -> None:
         self.steps.append(

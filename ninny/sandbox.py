@@ -46,10 +46,14 @@ class Sandbox:
     can_seal_readonly = False
     #: The files sealed read-only, set by `seal_readonly`.
     sealed_readonly: tuple[str, ...] = ()
+    #: Directories frozen so a sealed file cannot be renamed away from its path. Freezing the
+    #: file is not enough: a rename needs write permission on the PARENT, not on the file.
+    sealed_ancestors: tuple[str, ...] = ()
 
-    def seal_readonly(self, paths) -> bool:
+    def seal_readonly(self, paths, ancestors=()) -> bool:
         """Make `paths` unwritable for the rest of the run. Returns whether that will hold."""
         self.sealed_readonly = tuple(str(path) for path in paths)
+        self.sealed_ancestors = tuple(str(path) for path in ancestors)
         return self.can_seal_readonly
 
     def wrap(self, command: str, workdir: Path) -> list[str]:
@@ -109,16 +113,44 @@ class BwrapSandbox(Sandbox):
             "--setenv", "HOME", "/tmp",
             "--bind", tree, tree,
         ]
-        for path in self.sealed_readonly:
-            # The suite sealed at the red: read-only for the rest of the run, so a shell
-            # heredoc cannot rewrite the tests that failed. This has to come AFTER the
-            # writable tree bind -- later mounts win -- or the tree would win instead.
+        # The seal, in the one order that works. bwrap applies mounts left to right and later
+        # wins, so: the writable tree, then the frozen ancestors, then the suite directories
+        # re-opened for new test files, then the sealed files themselves.
+        for path in self.sealed_ancestors:
+            args += ["--ro-bind", path, path]
+        for parent in self._sealed_parents():
+            args += ["--bind", parent, parent]
+        for path in self._live_sealed():
             args += ["--ro-bind", path, path]
         args += [
             "--chdir", tree,
             "bash", "-c", command,
         ]
         return args
+
+    def _sealed_parents(self) -> list[str]:
+        """Each sealed file's directory, once, re-opened writable after the ancestors froze it.
+
+        Freezing an ancestor freezes everything under it, including the suite directory, and a
+        new test file still has to be allowed -- that is the whole point of sealing per file.
+        """
+        seen: list[str] = []
+        for path in self._live_sealed():
+            parent = os.path.dirname(path)
+            if parent and parent not in seen:
+                seen.append(parent)
+        return seen
+
+    def _live_sealed(self) -> list[str]:
+        """The sealed files that are still there.
+
+        A sealed path that has gone missing cannot be bound -- bwrap refuses to start with
+        "Can't find source path" and then EVERY later bash action fails, for a reason that is
+        this harness's fault rather than the model's, and the run cannot recover because the
+        shell is what broke. Seen live, when a model renamed the suite directory away. The seal
+        still reports it: the handback hash comparison notices the file is gone.
+        """
+        return [path for path in self.sealed_readonly if os.path.exists(path)]
 
     def describe(self) -> str:
         """One line naming what the run can see. Printed at the start of every run."""

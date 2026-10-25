@@ -448,6 +448,49 @@ broken (a file that was red is not the file that shipped), and `tests_added_afte
 suite extended. Collapsing them made `frozen=no` mean two things at once, and one of them was
 good work.
 
+### The second live run: the file was sealed, so the model moved the directory
+
+The very next sealed arm did not try to edit the file. It tried everything else first --
+`chmod u+w`, `mv test_spans.py test_spans.bak` -- and was refused by both, correctly, with the
+exact right errno (`Read-only file system`, then `Device or resource busy`). Then it renamed the
+whole SUITE DIRECTORY (`tests/own` -> `ownX`) and wrote a fresh suite at the same path. A rename
+needs write permission on the PARENT of the thing being renamed, not on the file. Per-file
+sealing left that door open, because per-file sealing is exactly what keeps the parent writable.
+
+So freezing the file is not enough: the parent's parent is frozen too, and the suite directory is
+re-opened writable after it, which keeps new test files allowed. The order is the whole design --
+freeze the ancestor, re-open the suite directory, close the sealed files last -- because bwrap
+applies mounts left to right and the last one wins. Two levels are never frozen: the working tree
+(that is every source write the model still has to make) and anything that holds source. A level
+that cannot be frozen is left open on purpose, and a broken seal is still reported.
+
+AND THAT RUN FOUND A BUG OF OURS, which matters more than the hole. Once a sealed path no longer
+existed, the next bash action died before it started:
+
+    bwrap: Can't find source path .../tests/own/README.md: No such file or directory
+
+bwrap refuses to start on a missing `--ro-bind` source, so EVERY later bash action fails, for a
+reason that is the harness's fault rather than the model's -- and the run cannot recover, because
+what broke is the shell it would use to recover. That arm spent its last fourteen steps unable to
+run a command, hit the step limit, and never submitted. A guarantee that can strand a run is
+worse than the hole it was closing. Sealed paths that no longer exist are now skipped when the
+argv is built; the handback hash comparison still reports that they went missing.
+
+Measured after the fix, inside a real namespace:
+
+    echo hacked > tests/own/test_x.py   -> Read-only file system        (rc 1)
+    sed -i s/False/True/ test_x.py      -> cannot rename ... busy       (rc 4)
+    rm -f tests/own/test_x.py           -> cannot remove ... busy       (rc 1)
+    mv tests/own tests/ownX             -> Read-only file system        (rc 1)
+    echo new > tests/own/test_new.py    -> works                        (rc 0)
+    echo code > src/impl.py             -> works                        (rc 0)
+    a sealed path that has vanished     -> the shell still starts       (rc 0)
+
+The lesson under the lesson: each fix closed the route that had been found and the model found
+the next one within a single run. That is the argument for the record being the guarantee -- a
+hash comparison at handback cannot be routed around, whatever route is invented -- and for
+treating the mounts as the cheap part that stops the casual case and makes the refusal honest.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)
