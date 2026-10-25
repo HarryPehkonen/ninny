@@ -135,5 +135,29 @@ class TheModeVocabularyHoldsTogether(unittest.TestCase):
         self.assertIn("exit 2", TDD_BLOCKS["split"])
 
 
+class SealedPerFile(SplitBase):
+    """What went red is what is frozen -- not the whole directory.
+
+    A new test file is allowed after the red: the suite that failed is still in there,
+    unchanged, and adding to a suite while implementing is usually good work. Frozen per
+    directory would forbid that, and would refuse files that had never run at all.
+    """
+
+    def test_an_unsealed_test_file_is_still_writable_after_the_red(self):
+        self.bank_a_red()
+        self.assertTrue(self.allow_at(7, self.write("tests/own/test_edges.py", "assert True\n")))
+
+    def test_the_sealed_file_is_still_refused(self):
+        self.bank_a_red()
+        self.assertFalse(self.allow_at(7, self.write(TEST_FILE, "assert True\n")))
+
+    def test_the_record_keeps_additions_apart_from_the_seal(self):
+        self.bank_a_red()
+        self.on_disk("tests/own/test_edges.py", "assert True\n")
+        self.policy.close_seal(self.state)
+        self.assertTrue(self.state.suite_frozen_since_red)
+        self.assertEqual(self.state.tests_added_after_red, ["tests/own/test_edges.py"])
+
+
 if __name__ == "__main__":
     unittest.main()

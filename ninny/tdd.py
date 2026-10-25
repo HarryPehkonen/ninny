@@ -108,6 +108,12 @@ class TDDState:
     # Steps where the sealed suite was opened again because it could not run at all. A
     # `frozen` verdict means less if the door was opened, so the record carries the door.
     seal_unlocks: list[list] = field(default_factory=list)
+    #: Test files that appeared after the red. Not a broken seal -- the red suite is still
+    #: in there, unchanged -- but a reader should not have to diff to find them.
+    tests_added_after_red: list[str] = field(default_factory=list)
+    #: Whether the sealed files were made read-only (the sandbox enforces it) or only
+    #: refused by the gate (nothing stops the shell). "Reported" and "enforced" differ.
+    sealed_readonly: bool = False
 
     @property
     def own_gate_red(self) -> bool:
@@ -156,6 +162,8 @@ class TDDState:
             "seal_step": self.seal_step,
             "suite_frozen_since_red": self.suite_frozen_since_red,
             "suite_changed_after_red": self.suite_changed_after_red,
+            "tests_added_after_red": self.tests_added_after_red,
+            "sealed_readonly": self.sealed_readonly,
             "seal_unlocks": self.seal_unlocks,
         }
 
@@ -251,12 +259,17 @@ class TDDPolicy:
         # the tests that ship have to be the tests that went red -- a guarantee `enforce`
         # cannot give, because it orders the writes and says nothing about the artifact.
         #
+        # Sealed PER FILE, not per directory. What went red is what gets frozen; a NEW test
+        # file is still allowed, because the suite the red came from is still in there,
+        # unchanged, and adding to it is usually good work. It also means the escape door
+        # below is only ever about files that already proved they run.
+        #
         # The door opens for exactly one case: a suite that does not RUN. You may fix a suite
         # the runner could not collect (exit 2, "nothing ran"); you may not change one that
         # ran and failed. Without that, a typo in a test file strands the run, and Ninny does
         # not build traps -- refusals elsewhere are refused once and then let through.
-        if self.mode == "split" and state.phase != "test":
-            if action.name == "write_file" and self.task.is_test_path(rel):
+        if self.mode == "split" and state.phase != "test" and state.sealed:
+            if action.name == "write_file" and rel in state.sealed:
                 if self._suite_cannot_run(state):
                     state.seal_unlocks.append([step, rel])
                 else:
@@ -375,14 +388,20 @@ class TDDPolicy:
 
     def _sealed_message(self, rel: str, sealed_at) -> str:
         return (
-            f"Refused ({rel} is sealed in this run). A red was banked at step {sealed_at}, and "
-            "from there the suite is frozen -- the tests handed back have to be the tests that "
-            "failed, and the record says whether they are.\n"
-            f"You are in {phase_line('impl')}. Write the implementation under "
-            f"{', '.join(self.task.src_globs)} and run the suite as often as you like.\n"
-            "One door: a suite that does not RUN -- exit 2, a syntax error, a missing import -- "
-            "is not a suite anyone can be held to, so it may be edited again while it cannot "
-            "run. A suite that ran and FAILED is closed for the rest of the run."
+            f"Refused ({rel} was sealed at step {sealed_at}). A red was banked, and from that "
+            "point the files that failed are frozen: the tests that ship have to be the tests "
+            "that were red, and this run is recorded as to whether they are.\n"
+            "The file is read-only for the rest of the run, so no route around this -- not a "
+            "shell heredoc, not sed -- will change it.\n"
+            "Write the implementation and run the suite as often as you like. You may still ADD "
+            "new test files; the record notes them separately.\n"
+            "If a sealed test is wrong, and the implementation cannot satisfy it, say so in your "
+            "final message instead of editing it. Handing back a red suite is allowed, and a "
+            "truthful one is worth more than a green one.\n"
+            "One door, and only one: a suite that does not RUN -- exit 2, a syntax error, a "
+            "missing import -- is not a suite anyone can be held to, so a sealed file may be "
+            "edited again while the suite cannot run at all. A suite that ran and FAILED is "
+            "closed for the rest of the run."
         )
 
     # ------------------------------------------------------------------- observe
@@ -446,12 +465,16 @@ class TDDPolicy:
         if state.sealed is None:
             return
         current = snapshot(self.workdir, self.task.test_globs)
-        changed = sorted(
-            path for path in set(state.sealed) | set(current)
-            if state.sealed.get(path) != current.get(path)
+        # Two different facts, kept apart on purpose. A file that was red and changed is the
+        # seal broken -- the tests that shipped are not the tests that failed. A file ADDED
+        # after the red is usually good work: the suite the red came from is still in there,
+        # unchanged, and still passing. Collapsing them into one `changed` list threw away
+        # that distinction, and made `frozen=no` mean two things at once.
+        state.suite_changed_after_red = sorted(
+            path for path in state.sealed if state.sealed.get(path) != current.get(path)
         )
-        state.suite_changed_after_red = changed
-        state.suite_frozen_since_red = not changed
+        state.tests_added_after_red = sorted(path for path in current if path not in state.sealed)
+        state.suite_frozen_since_red = not state.suite_changed_after_red
 
     def observe_tree(self, state: TDDState, step: int) -> None:
         """Reconcile the record against the tree, which is the ground truth.

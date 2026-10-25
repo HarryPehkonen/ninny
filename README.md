@@ -128,7 +128,7 @@ throughout (paths shortened; the record holds absolute ones):
 === Submitted ===
 exit=Submitted  steps=9  api_calls=9  cost=$0.0027
 tokens: in=36960 out=3740
-test-first: red-first  (mode=request, red_step=4 (exit 1), first_src_step=5, refusals=0, bypasses=0, suite_frozen=yes (sealed at step 4))
+test-first: red-first  (mode=request, red_step=4 (exit 1), first_src_step=5, refusals=0, bypasses=0, suite_frozen=yes (sealed at step 4, read-only))
   diff:       1 added, 1 changed, 0 deleted (+182 -5)
   log:        ~/.local/state/ninny/logs/20261022-164648-run-redkind-r1.log
 ```
@@ -287,9 +287,15 @@ its own trajectory instead of from a note somebody wrote down.
 ```bash
 --tdd request    # never refuse; record what happened  (the loose gate, the default)
 --tdd enforce    # also refuse source writes until a test has been seen to fail
+--tdd split      # two rounds: tests first, then code, and the red suite is sealed read-only
 --tdd reverse    # allow the code first; require tests before submitting
 --tdd off
 ```
+
+`enforce` orders the writes. `split` is the one that makes a claim about the **artifact**: the
+moment a red is banked, the files that failed are frozen (`--ro-bind` per bash action, so a shell
+heredoc cannot route around it) and the record says whether the tests handed back are the tests
+that were red. Adding *new* test files after the red is still allowed, and counted separately.
 
 ### The phases, named
 

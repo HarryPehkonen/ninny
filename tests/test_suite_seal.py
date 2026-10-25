@@ -79,12 +79,16 @@ class TheSuiteIsSealedAtTheRed(SealBase):
         self.assertFalse(self.state.suite_frozen_since_red)
         self.assertEqual(self.state.suite_changed_after_red, [TEST_FILE])
 
-    def test_a_test_file_added_after_the_red_is_not_frozen(self):
+    def test_a_test_file_added_after_the_red_is_reported_but_does_not_break_the_seal(self):
+        # The suite the red came from is still in there, unchanged, and still passing. Adding
+        # to a suite after the red is usually good work, so it is not the seal broken -- but a
+        # reader should not have to diff the tree to find out that it happened.
         self.bank_a_red()
         self.on_disk("tests/own/test_more.py", "assert False\n")
         self.seal()
-        self.assertFalse(self.state.suite_frozen_since_red)
-        self.assertEqual(self.state.suite_changed_after_red, ["tests/own/test_more.py"])
+        self.assertTrue(self.state.suite_frozen_since_red)
+        self.assertEqual(self.state.suite_changed_after_red, [])
+        self.assertEqual(self.state.tests_added_after_red, ["tests/own/test_more.py"])
 
     def test_a_test_file_deleted_after_the_red_is_not_frozen(self):
         self.bank_a_red()
@@ -148,7 +152,7 @@ class TheSummaryLineSaysIt(SealBase):
         self.seal()
         result = RunResult()
         result.tdd = self.state.as_dict()
-        self.assertIn("suite_frozen=yes (sealed at step 4)", result.summary())
+        self.assertIn("suite_frozen=yes (sealed at step 4, reported only)", result.summary())
 
     def test_the_printed_line_names_the_files_when_the_suite_moved(self):
         from ninny.agent import RunResult
@@ -159,7 +163,7 @@ class TheSummaryLineSaysIt(SealBase):
         result = RunResult()
         result.tdd = self.state.as_dict()
         line = result.summary()
-        self.assertIn("suite_frozen=no (1 test file(s) changed after the red", line)
+        self.assertIn("suite_frozen=no (1 sealed file(s) changed after the red", line)
         self.assertIn(TEST_FILE, line)
 
     def test_the_printed_line_says_n_a_without_a_red(self):

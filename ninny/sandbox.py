@@ -40,6 +40,18 @@ class SandboxError(Exception):
 class Sandbox:
     name = "none"
 
+    #: Whether this backend can make a path unwritable for the rest of a run. The seal is
+    #: reported either way -- only the enforcement depends on the backend, and the record says
+    #: which of the two happened, because "reported" and "enforced" are not the same claim.
+    can_seal_readonly = False
+    #: The files sealed read-only, set by `seal_readonly`.
+    sealed_readonly: tuple[str, ...] = ()
+
+    def seal_readonly(self, paths) -> bool:
+        """Make `paths` unwritable for the rest of the run. Returns whether that will hold."""
+        self.sealed_readonly = tuple(str(path) for path in paths)
+        return self.can_seal_readonly
+
     def wrap(self, command: str, workdir: Path) -> list[str]:
         return ["bash", "-c", command]
 
@@ -69,6 +81,7 @@ class Sandbox:
 
 class BwrapSandbox(Sandbox):
     name = "bwrap"
+    can_seal_readonly = True
 
     def __init__(self, binary: str, share_net: bool = False, binds: list[str] | tuple[str, ...] = ()):
         self.binary = binary
@@ -95,6 +108,13 @@ class BwrapSandbox(Sandbox):
             "--tmpfs", "/tmp",
             "--setenv", "HOME", "/tmp",
             "--bind", tree, tree,
+        ]
+        for path in self.sealed_readonly:
+            # The suite sealed at the red: read-only for the rest of the run, so a shell
+            # heredoc cannot rewrite the tests that failed. This has to come AFTER the
+            # writable tree bind -- later mounts win -- or the tree would win instead.
+            args += ["--ro-bind", path, path]
+        args += [
             "--chdir", tree,
             "bash", "-c", command,
         ]

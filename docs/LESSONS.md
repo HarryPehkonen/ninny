@@ -426,11 +426,27 @@ Three things this settles:
     was the only trace. Attribution is a recorder gap, not a guarantee gap.
 
 The structural version follows from this and is cheap: every bash action already runs in its own
-bwrap namespace, and `--ro-bind` is already how the rest of the machine is hidden. Binding the
-sealed test FILES read-only for the remainder of the run is enforcement the shell cannot route
-around. Two calls belong to the keeper: seal each file or the whole directory (per-file still lets
-the model ADD tests, which is often good work), and does the seal mean "nothing changed" or
-"nothing that was red changed".
+bwrap namespace, and `--ro-bind` is already how the rest of the machine is hidden. Sealed PER
+FILE -- what went red is what is frozen, so a new test file is still allowed, because the suite
+that failed is still in there unchanged and adding to a suite while implementing is usually good
+work. Per directory would forbid that and would refuse files that had never run at all.
+
+Measured with every route the live arm could have taken, inside a real namespace:
+
+  * `echo hacked > tests/own/test_x.py`  -> `Read-only file system`         (rc 1)
+  * `rm -f tests/own/test_x.py`          -> `Device or resource busy`       (rc 3)
+  * `sed -i s/False/True/ test_x.py`     -> `cannot rename ... busy`        (rc 4)
+  * append to an UNSEALED test file      -> works                          (rc 0)
+
+So the boundary is now a capability, and the seal is what it always was: the thing that says
+whether it held. When the backend cannot provide the bind (`--sandbox none`) the
+report is still made and the record says `reported only`, because a reported seal and an enforced
+one are different claims and the weaker must not read as the stronger.
+
+Two facts are kept apart in the record for the same reason: `suite_changed_after_red` is the seal
+broken (a file that was red is not the file that shipped), and `tests_added_after_red` is the
+suite extended. Collapsing them made `frozen=no` mean two things at once, and one of them was
+good work.
 
 ## The adapter layer: six copies of one bug class (2026-10-23)
 

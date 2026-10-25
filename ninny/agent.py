@@ -71,10 +71,13 @@ class RunResult:
         frozen = self.tdd.get("suite_frozen_since_red")
         if frozen is None:
             return "n/a (no red)"
+        added = self.tdd.get("tests_added_after_red", [])
+        extra = f", {len(added)} added after the red: {', '.join(added)}" if added else ""
+        how = "read-only" if self.tdd.get("sealed_readonly") else "reported only"
         if frozen:
-            return f"yes (sealed at step {self.tdd.get('seal_step')})"
+            return f"yes (sealed at step {self.tdd.get('seal_step')}, {how}{extra})"
         changed = self.tdd.get("suite_changed_after_red", [])
-        return f"no ({len(changed)} test file(s) changed after the red: {', '.join(changed)})"
+        return f"no ({len(changed)} sealed file(s) changed after the red: {', '.join(changed)}{extra})"
 
     def _red_exit_note(self) -> str:
         """Which exit code the banked RED came from.
@@ -107,6 +110,8 @@ class Agent:
     ):
         self.client = client
         self.env = environment
+        # The sealed suite is made read-only once, at the step the red is banked.
+        self._sealed_applied = False
         self.policy = policy
         self.task = task
         self.workdir = Path(workdir)
@@ -192,6 +197,7 @@ class Agent:
                 observation = self.env.execute(action)
                 self.policy.observe(action, observation, state, step)
                 self.policy.observe_tree(state, step)
+                self._enforce_seal(state)
                 # What the model is told and what the record says it was told are the same
                 # string: the phase note is prepended to the observation itself, because a
                 # note in the harness's own log is a note the model never reads.
@@ -251,6 +257,34 @@ class Agent:
             # A reply that used fenced blocks instead of tool calls has no tool
             # role to answer into; the result goes back as the next user turn.
             self.messages.append({"role": "user", "content": f"Result:\n{text}"})
+
+    def _enforce_seal(self, state) -> None:
+        """Make the sealed suite read-only the moment a red is banked.
+
+        The gate refuses a `write_file` into a sealed test file, but a shell heredoc is not a
+        `write_file`: the first live `split` run rewrote its failing test through one and the
+        gate never saw it. So the seal is enforced where the shell cannot route around it --
+        the sandbox binds each sealed file read-only for the remainder of the run.
+
+        Reported either way, and the record says which: a seal that is only *reported* is a
+        different claim from one that is *enforced*, and collapsing them would let the weaker
+        one read as the stronger.
+        """
+        sealed = state.sealed or {}
+        if not sealed or self._sealed_applied:
+            return
+        self._sealed_applied = True
+        names = ", ".join(sorted(sealed))
+        state.sealed_readonly = self.env.sandbox.seal_readonly(
+            [str(self.workdir / rel) for rel in sealed]
+        )
+        if state.sealed_readonly:
+            self.log(f"[seal] read-only for the rest of the run: {names}")
+        else:
+            self.log(
+                f"[seal] sealed in the record but NOT enforced -- sandbox "
+                f"{self.env.sandbox.name!r} cannot make a path read-only: {names}"
+            )
 
     def _record(self, step: int, action, allowed: bool, observation: str, exit_code) -> None:
         self.steps.append(
