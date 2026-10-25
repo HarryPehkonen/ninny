@@ -128,7 +128,7 @@ throughout (paths shortened; the record holds absolute ones):
 === Submitted ===
 exit=Submitted  steps=9  api_calls=9  cost=$0.0027
 tokens: in=36960 out=3740
-test-first: red-first  (mode=request, red_step=4 (exit 1), first_src_step=5, refusals=0, bypasses=0)
+test-first: red-first  (mode=request, red_step=4 (exit 1), first_src_step=5, refusals=0, bypasses=0, suite_frozen=yes (sealed at step 4))
   diff:       1 added, 1 changed, 0 deleted (+182 -5)
   log:        ~/.local/state/ninny/logs/20261022-164648-run-redkind-r1.log
 ```

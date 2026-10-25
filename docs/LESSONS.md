@@ -380,6 +380,30 @@ cap, so the limit is no longer the binding constraint; nothing moves without a f
   string matching the `test_cmd` will sometimes miss a wrapped command or fire on a listing --
   it is a recorder, so a miss costs fidelity, not correctness.
 
+## The record proved the order and inferred the artifact (2026-10-25)
+
+`red-first` means one thing exactly: a suite RAN and failed before the first source write. It
+does not mean the tests that shipped are the tests that failed, and a reader assumes it does.
+
+Measured, and it is not rare. Of the five `enforce` arms on `tasks/spans`, **one** rewrote its
+test file after the source existed -- 143 lines at the step that went red, rewritten to 199
+lines at step 13, verdict still `red-first`. The first live run after the seal was added was
+worse: `red_step=4`, `first_src_step=5`, `suite_frozen=no`, **two** test files changed after the
+red. The order was real; the artifact was not the proven one.
+
+The fix is a seal, not a prohibition. Hash `tests/own/**` at the moment the red is banked
+(`seal_step`), read the tree again at handback, and report `suite_frozen_since_red`. Read from
+bytes, never from the action log, so a rewrite through a shell heredoc, `sed` or a script counts
+the same as one through `write_file` -- the log cannot see those, which is the whole reason the
+verdict is taken from the tree. `None`, not `yes`, when no red was banked: there is nothing to
+seal, and claiming the guarantee anyway is the same vacuous pass this project keeps finding.
+
+What this is NOT: a judgement. Adding a test file after the red is often the agent finding a
+case while implementing, and that is good work. The field reports provenance; the reader decides
+what it means. The strong version -- tests frozen so the shipped suite IS the red suite -- is a
+protocol change (two rounds, the test tool removed in the second), and it belongs after this,
+not instead of it.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)

@@ -57,8 +57,24 @@ class RunResult:
             f"test-first: {verdict}  (mode={self.tdd.get('mode')}, "
             f"red_step={self.tdd.get('red_step')}{self._red_exit_note()}, "
             f"first_src_step={self.tdd.get('first_src_step')}, refusals={len(self.tdd.get('refusals', []))}, "
-            f"bypasses={len(self.tdd.get('bypass_detected', []))})"
+            f"bypasses={len(self.tdd.get('bypass_detected', []))}, "
+            f"suite_frozen={self._seal_note()})"
         )
+
+    def _seal_note(self) -> str:
+        """Whether the suite handed back is the suite that went red.
+
+        `n/a` when no red was banked -- there is nothing to seal, and `yes` there would
+        claim a guarantee the run never earned. `no` names the one case where `red-first`
+        is true and the shipped tests are nonetheless not the tests that failed.
+        """
+        frozen = self.tdd.get("suite_frozen_since_red")
+        if frozen is None:
+            return "n/a (no red)"
+        if frozen:
+            return f"yes (sealed at step {self.tdd.get('seal_step')})"
+        changed = self.tdd.get("suite_changed_after_red", [])
+        return f"no ({len(changed)} test file(s) changed after the red: {', '.join(changed)})"
 
     def _red_exit_note(self) -> str:
         """Which exit code the banked RED came from.
@@ -199,6 +215,7 @@ class Agent:
             result.exit_status = "StepLimit"
 
         result.wall_time_s = time.time() - started
+        self.policy.close_seal(state)
         result.tdd = state.as_dict()
         if self.pricing is not None:
             result.cost = self.pricing.cost(self.client.model, result.usage)

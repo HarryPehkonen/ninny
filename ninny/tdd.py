@@ -97,6 +97,14 @@ class TDDState:
     bypass_detected: list[list] = field(default_factory=list)
     submit_refusals: int = 0
     red_submit_refusals: int = 0
+    # The test suite as it was at the RED observation, {relpath: sha256}, and the step the
+    # seal was taken. The order of the writes is one claim; the provenance of the artifact
+    # is another. A run can bank a real red and then rewrite the suite that red came from,
+    # and `red-first` stays true while the tests that ship are not the tests that failed.
+    sealed: dict[str, str] | None = None
+    seal_step: int | None = None
+    suite_frozen_since_red: bool | None = None
+    suite_changed_after_red: list[str] = field(default_factory=list)
 
     @property
     def own_gate_red(self) -> bool:
@@ -142,6 +150,9 @@ class TDDState:
             "submit_refusals": self.submit_refusals,
             "red_submit_refusals": self.red_submit_refusals,
             "own_gate_red": self.own_gate_red,
+            "seal_step": self.seal_step,
+            "suite_frozen_since_red": self.suite_frozen_since_red,
+            "suite_changed_after_red": self.suite_changed_after_red,
         }
 
 
@@ -371,10 +382,35 @@ class TDDPolicy:
             if had_a_test_to_fail and state.red_step is None:
                 state.red_step = step
                 state.red_exit = code
+                # Seal the suite where it went red. Read back from the tree at handback,
+                # not from the action log, so that a rewrite the log cannot see -- a shell
+                # heredoc, sed, a script -- counts exactly like one through write_file.
+                state.sealed = snapshot(self.workdir, self.task.test_globs)
+                state.seal_step = step
             if state.red_ok:
                 self._enter(state, "impl", step)
         elif action.is_submit():
             self._enter(state, "done", step)
+
+    def close_seal(self, state: TDDState) -> None:
+        """Was the suite handed back the suite that was red?
+
+        The verdict is read from the tree, never from the action log, so a test file
+        rewritten through a route the log cannot see -- a shell heredoc, sed, a script --
+        counts the same as one rewritten with write_file.
+
+        `suite_frozen_since_red` stays None when no red was ever banked: there is nothing
+        to seal, and reporting `yes` there would claim a guarantee the run never earned.
+        """
+        if state.sealed is None:
+            return
+        current = snapshot(self.workdir, self.task.test_globs)
+        changed = sorted(
+            path for path in set(state.sealed) | set(current)
+            if state.sealed.get(path) != current.get(path)
+        )
+        state.suite_changed_after_red = changed
+        state.suite_frozen_since_red = not changed
 
     def observe_tree(self, state: TDDState, step: int) -> None:
         """Reconcile the record against the tree, which is the ground truth.
