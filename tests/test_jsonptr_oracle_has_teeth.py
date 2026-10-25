@@ -97,5 +97,21 @@ class TheJsonptrOracleHasTeeth(unittest.TestCase):
         self.assertTrue(traps, f"the trap was not caught by a trap case:\n{named}")
 
 
+    def test_a_suite_written_from_the_examples_does_not_kill_the_trap(self):
+        # The other half of the claim. The oracle can tell careful from hasty -- and a suite built
+        # from the specification's own examples CANNOT, which is why a task whose examples cover
+        # the rule measures nothing. This one passes against the answer key and against the trap.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = tree_with(TRAP, tmp)
+            (tree / "tests" / "own").mkdir(parents=True, exist_ok=True)
+            shutil.copy(TASK / "oracle" / "example_suite.test.js",
+                        tree / "tests" / "own" / "example.test.js")
+            proc = subprocess.run(["bash", "tools/run_own_tests.sh"], cwd=str(tree),
+                                  capture_output=True, text=True, timeout=600)
+        self.assertEqual(proc.returncode, 0,
+                         f"an example-driven suite caught the trap, so the examples do cover the "
+                         f"rule and this task measures typing, not care:\n{output(proc)[-2000:]}")
+
+
 if __name__ == "__main__":
     unittest.main()
