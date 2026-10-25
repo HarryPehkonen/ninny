@@ -98,8 +98,12 @@ no door and no way round it -- a sealed file has no write path left.
 So take round 1 seriously: a test that passes by accident seals nothing, and a test you
 will want to change later is a test you got wrong. If a sealed test is wrong and the
 implementation cannot satisfy it, say so in your final message instead of trying to edit
-it. Handing back a red suite is allowed, and a truthful one is worth more than a green
-one. You may still ADD new test files; the record counts them separately.
+it. Handing back a red suite is allowed **only for that case** -- a sealed test that is
+wrong -- never because the implementation is inconvenient. You may still ADD new test
+files; the record counts them separately.
+
+And whatever you do: **never hand back a suite you have not run since your last change.**
+A suite nobody ran after the last edit is a claim, not an observation.
 
 {not_a_red}
 
