@@ -132,8 +132,19 @@ The record compares the test files you hand back against the test files that wer
 Change a file that was red -- with `write_file`, from the shell, or by moving it out of the
 way -- and the run is recorded as a broken seal, and "a failing test was seen first" stops
 meaning what a reader would take it to mean. Test files you ADD afterwards are allowed and
-counted separately. If a test turns out to be wrong, report it in your final message rather
-than editing it: an honest red is worth more than an edited green."""
+counted separately.
+
+Two different things can be wrong, and they have different answers:
+
+- **The implementation is wrong.** Then the suite is doing its job: keep going until it is
+  green. A red suite is a finished piece of work only when the TEST is wrong, never because
+  the code is inconvenient.
+- **A sealed test is genuinely wrong** and the implementation cannot satisfy it. Report that
+  in your final message instead of editing the file: an honest red there is worth more than
+  an edited green.
+
+And whatever you do: **never hand back a suite you have not run since your last change.**
+A suite nobody ran after the last edit is a claim, not an observation."""
 
 
 def render_instance(task, workdir: str, tdd_mode: str, sandbox_note: str) -> str:

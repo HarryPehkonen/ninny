@@ -577,6 +577,37 @@ effects are elsewhere, and they are real: the order of the writes (13% -> 100% r
 at handback (the seal, and the routes around it that the record caught), and now the teeth of the suite
 an arm ships (5 of 5 mutants killed, measured per arm -- a property that could have failed and did not).
 
+### The first non-acceptance, and it was procedural (2026-10-25)
+
+Fifty-eight arms in, one failed acceptance: `bits/ab-enforce-notice-1`. The implementation is FINE --
+the acceptance corpus builds and passes. What fails is that **the submission's own suite does not
+pass**, and the record says why:
+
+    test_runs      [[6,1],[8,1]]      red at 6, red at 8, and then 21 steps with NO test run
+    refusals       [[12,'outside: /tmp/verify.cpp'], [24,'submit on a red tree']]
+    exit_status    Submitted (step 29)
+    final_output   11 characters: "---dirs---"
+
+The two failing cases are the model's OWN test bugs -- boundary guards that should have been
+`p > 2u` and `n >= 1` -- and the model diagnosed exactly that, in a comment, inside a NEW test file it
+added (which the seal allows) rather than the sealed file (which it does not). So it knew the suite was
+red, and handed it back anyway.
+
+**The corpus requires a RED before the code and requires nothing at all before the handback.** A run
+can ship a suite it has never once seen pass, and nothing in the record objects. That is the mirror of
+the rule the project is built on, and it stayed invisible for 58 arms because arms usually re-run their
+suite on the way to green.
+
+My own contribution to it: the seal notice said "an honest red is worth more than an edited green",
+written with a sealed, genuinely-wrong test in mind and readable as a general licence to hand back red.
+Reworded to separate the two cases -- the implementation is wrong (keep going until green) from a sealed
+test being wrong (report it, do not edit it) -- and it now states the missing invariant outright: never
+hand back a suite you have not run since your last change.
+
+Enforcing it would be the same shape as `submit on a red tree`, which DID fire on this arm at step 24
+and was recorded: carry `last_run_step` and `last_src_step`, and nudge the first submit when the suite
+has not run since the last source write. Stated but not yet enforced -- one rule, one arm of evidence.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)

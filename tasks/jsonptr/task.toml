@@ -27,6 +27,10 @@ oracle_cmd = "bash oracle/accept.sh"
 # A planted failing test, so `ninny verify-task` can require this task's own runner to report a red
 # as a red. Runs with cwd = the staging directory, like oracle_cmd.
 probe_cmd = "bash oracle/probe.sh"
+# What a sabotage fixture replaces when scripts/mutant-kill.py asks whether an arm's suite has
+# teeth: the fixture goes in as this file, the arm's own frozen test command runs, and only a
+# failing suite counts as a kill.
+sabotage_target = "src/pointer.js"
 
 # The agent's own loop. Exit 0 ran and passed, 1 ran and failed, 2 could not run.
 test_cmd = "bash tools/run_own_tests.sh"
