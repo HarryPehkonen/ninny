@@ -1,0 +1,44 @@
+name = "spans"
+spec_file = "SPEC.md"
+tree = "tree"
+
+# A tree in which this task is already solved, used ONLY by `ninny verify-task` to
+# prove the oracle can pass. It lives beside the oracle, outside tree/, so it is
+# never copied into a run.
+fixed_tree = "fixed"
+
+# The acceptance suite lives HERE, never inside tree/. If the agent could read it
+# it could write its own tests from the answer key, and "did it write tests" and
+# "did it write them first" would both stop meaning anything.
+oracle = "oracle"
+oracle_cmd = "bash oracle/gate.sh"
+# A planted failing test, so `ninny verify-task` can require this task's own runner to
+# report a red as a red. Runs with cwd = the staging directory, like oracle_cmd.
+probe_cmd = "bash oracle/probe.sh"
+
+# What the `run_tests` action runs, and the event the test-first record is built
+# on: a non-zero exit here is a RED observation. The script itself fails when no
+# tests exist, so a vacuous suite cannot be mistaken for a pass.
+test_cmd = "bash tools/run_own_tests.sh"
+
+test_globs = ["tests/own/**"]
+src_globs = ["src/**"]
+# The agent may not edit these: it would be editing the instrument.
+protected_globs = ["tools/**"]
+
+preflight = ["python3 -V"]
+step_limit = 30
+timeout_s = 60
+test_timeout_s = 120
+
+# The adapter, as a config. `ninny runner --task tasks/spans` prints what this renders;
+# `--write` writes it; `--check` fails when tree/tools/run_own_tests.sh differs from it.
+[runner]
+about = 'Python / unittest. Your suite is every tests/own/test*.py.'
+note = '''discover -s tests/own -t tests/own is deliberate: with -t . the suite is unimportable until
+package markers exist, so a missing __init__.py used to look like a failing test.
+A suite that does not even import prints no summary line, so the count is zero and that is
+exit 2 -- nothing was observed.'''
+run = 'python3 -m unittest discover -s tests/own -t tests/own -v'
+build_fail = '_FailedTest|Failed to import test module|^SyntaxError|^IndentationError'
+sum = '^Ran ([0-9]+) tests?'

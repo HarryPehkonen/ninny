@@ -30,7 +30,8 @@ for res in sorted(glob.glob("runs/*/ab-*/result.json")):
         # oracle's output format is the task's business, not ours. Tasks that compile a frozen
         # harness also print a count; unittest-based oracles print "Ran N tests" instead.
         accepted = "1" if p.returncode == 0 else "0"
-        m = re.search(r"ACCEPTANCE:\s*(\d+)\s*checked,\s*(\d+)\s*failed", p.stdout)
+        combined = p.stdout + p.stderr   # unittest prints its FAIL lines to stderr
+        m = re.search(r"ACCEPTANCE:\s*(\d+)\s+(?:checked|tests),\s*(\d+)\s+failed", combined)
         if m:
             checked, failed = int(m.group(1)), int(m.group(2))
         else:
