@@ -427,9 +427,9 @@ any files at all.
 
 ### The format is not Python-shaped
 
-Eight tasks ship here — `roman`, `dur`, `intset`, `nasm-sum`, `bits`, `roman-cli`, `cron`,
-`ninny-gate` — across five languages and four test runners, each with its oracle and its answer
-key (`fixed/`). They are **worked examples of the format**, not a benchmark: **a benchmark whose
+Ten tasks ship here — `roman`, `spans`, `dur`, `jsonptr`, `intset`, `nasm-sum`, `bits`,
+`roman-cli`, `cron`, `ninny-gate` — across five languages and six ways of running tests, each with
+its oracle and its answer key (`fixed/`). They are **worked examples of the format**, not a benchmark: **a benchmark whose
 answer key is public is not a benchmark.** If you want to score models on one of them, keep its
 `oracle/` and `fixed/` out of your published tree — everything needed to grade lives there, and
 everything a model must not see lives there too.

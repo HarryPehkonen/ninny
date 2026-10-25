@@ -141,7 +141,12 @@ across targets, because `0 passed` is a green run.
 - **A planted test must match the runner's own discovery rule, or it never runs.** The first
   version of `roman`'s probe wrote `tests/own/probe_test.py`; unittest's default pattern is
   `test*.py`, so the suite correctly found nothing and the control failed with "exit 2". The
-  probe's file name is part of the task's contract.
+  probe's file name is part of the task's contract. **Hit again in Node** (`jsonptr`): the pattern
+  there is the opposite way round -- `tests/own/*.test.js` -- so `test_probe.js` is invisible
+  while `probe.test.js` is found. The lesson generalises: read the `require` key in the `[runner]`
+  block, because that, and not the language, is what decides whether the planted test runs. It
+  matters more than it looks: a control that fails for a scaffolding reason is indistinguishable
+  from a runner that misreports a red, which is the one defect these controls exist to catch.
 - **A README may not promise a discovery rule the toolchain does not have.** `tasks/intset`
   told the agent to write `tests/own/*.rs`, and Cargo only autodiscovers `tests/*.rs` and
   `tests/*/main.rs`. Measured: `tests/own/merging.rs` left the suite at `exit 2` "0 passed",

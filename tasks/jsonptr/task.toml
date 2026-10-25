@@ -1,0 +1,55 @@
+# The first task written to DISCRIMINATE: RFC 6901, where the obvious implementation is subtly
+# wrong and the RFC's own example set cannot tell the two apart.
+#
+# Why this one. The corpus is saturated on outcome -- 51 arms, 9 tasks, 6 harnesses, acceptance
+# 100%, not one arm ever submitted-and-wrong -- so the question the project exists to answer has an
+# empty population to answer it with. More tasks of the same kind cannot fill it, because the
+# models do not get them wrong. `spans` was the first attempt at a discriminating task and it
+# discriminated nothing (5 enforce arms, 5/5 accepted).
+#
+# RFC 6901 section 3 says to transform `~1` to `/` and THEN `~0` to `~`, and says why. Section 5's
+# example set contains `~1` and `~0` but never the case that separates the two orders. So a hasty
+# implementation -- the one-liner in the other order, or a single pass that re-processes its own
+# output -- passes every example in the specification it is being tested against, and a hasty test
+# suite written from those examples passes with it. The rule is stated in SPEC.md exactly as the
+# RFC states it; following it literally is correct. Nothing is hidden and nothing is unfair -- the
+# gap is between reading and skimming, which is the gap test-first is supposed to close.
+#
+# sabotage/ holds the plausible-but-wrong implementations the oracle must reject. If the oracle
+# cannot reject them the task cannot discriminate, and it does not get published.
+name = "jsonptr"
+spec_file = "SPEC.md"
+tree = "tree"
+fixed_tree = "fixed"
+
+oracle = "oracle"
+oracle_cmd = "bash oracle/accept.sh"
+# A planted failing test, so `ninny verify-task` can require this task's own runner to report a red
+# as a red. Runs with cwd = the staging directory, like oracle_cmd.
+probe_cmd = "bash oracle/probe.sh"
+
+# The agent's own loop. Exit 0 ran and passed, 1 ran and failed, 2 could not run.
+test_cmd = "bash tools/run_own_tests.sh"
+test_globs = ["tests/own/**"]
+src_globs = ["src/**"]
+# src/cli.js is frozen: in src_globs so the diff shows it, in protected_globs so a write to it is
+# refused rather than counted as the implementation.
+protected_globs = ["tools/**", "tests/own/README.md", "src/cli.js"]
+preflight = ["node --version"]
+# node lives under the home directory, which the sandbox hides. Bind the whole prefix, not just
+# bin/: a single directory leaves node's own libraries behind and the failure looks like a broken
+# install rather than a missing bind.
+sandbox_binds = ["$HOME/.hermes/node"]
+step_limit = 30
+timeout_s = 120
+test_timeout_s = 180
+
+[runner]
+about = 'Node / node --test. Your suite is every tests/own/*.test.js.'
+note = '''The summary cannot be taken at face value. Measured against Node 20 and 26: a file whose
+cases all ran contributes its cases, while a file with no cases contributes ITSELF, as an entry
+named by its path. Those are subtracted, and a run that still has no cases is exit 2.'''
+require = 'tests/own/*.test.js'
+run = 'node --test --test-reporter=tap tests/own/'
+sum = '^# tests ([0-9]+)$'
+count_minus = '^(not )?ok [0-9]+ - .*(/|\\.js)$'
