@@ -2,8 +2,8 @@
 
 `enforce` guarantees the ORDER of the writes. `split` guarantees the ARTIFACT: from the moment
 a red is banked the suite is sealed, so the tests handed back have to be the tests that failed.
-These tests pin the boundary, the one door through it, and the invariant that keeps the mode
-vocabulary and the prompt from drifting apart.
+These tests pin the boundary, its enforcement at both layers, and the invariant that keeps the
+mode vocabulary and the prompt from drifting apart.
 """
 
 import unittest
@@ -65,32 +65,53 @@ class RoundTwo(SplitBase):
         self.assertFalse(self.allow_at(5, self.write(TEST_FILE, "assert True\n")))
         self.assertEqual(self.state.refusals[-1][1], f"sealed: {TEST_FILE}")
 
-    def test_the_refusal_explains_the_seal_and_the_door(self):
+    def test_the_refusal_explains_the_seal_and_that_there_is_no_way_round_it(self):
         self.bank_a_red()
         message = self.policy.gate(self.write(TEST_FILE), self.state, 5)
         self.assertIn("sealed", message)
-        self.assertIn("exit 2", message)
-        self.assertIn("closed", message)
+        self.assertIn("no write path left", message)
 
 
-class TheOneDoor(SplitBase):
-    def test_a_suite_that_cannot_run_may_be_edited(self):
+class ThereIsNoDoor(SplitBase):
+    """A sealed file has no write path -- not even when the suite cannot run.
+
+    There used to be a door here: a suite that could not RUN (exit 2) could be edited again, on
+    the reasoning that nobody can be held to a suite that does not run. A live `split` arm walked
+    straight through it. It broke its own source until the suite would not import (exit 2 at step
+    26), was refused at step 24, and was ALLOWED at step 28 -- and the write LANDED, because the
+    file tool writes from the harness process and the read-only bind only reaches inside the bash
+    sandbox. Two enforcement layers, two paths, and the door was the gap between them.
+
+    Nothing needs the door. The seal is taken at a run that returned 1, so the sealed files
+    provably ran; a later exit 2 comes from a new unsealed file (still writable) or from the
+    model's own source edits (still writable). Both remain fixable, so removing the door creates
+    no trap and closes the only path to a sealed file.
+    """
+
+    def test_a_suite_that_cannot_run_does_not_reopen_a_sealed_file(self):
         self.bank_a_red()
         self.run_suite(2, step=5)              # exit 2: nothing ran
-        self.assertTrue(self.allow_at(6, self.write(TEST_FILE, "assert False\n")))
+        self.assertFalse(self.allow_at(6, self.write(TEST_FILE, "assert False\n")))
 
-    def test_the_unlock_is_recorded(self):
-        self.bank_a_red()
-        self.run_suite(2, step=5)
-        self.allow_at(6, self.write(TEST_FILE, "assert False\n"))
-        self.assertEqual(self.state.seal_unlocks, [[6, TEST_FILE]],
-                         "a frozen suite means less if the door was opened, so the door is recorded")
-
-    def test_a_suite_that_ran_and_FAILED_is_closed(self):
+    def test_a_suite_that_ran_and_failed_does_not_reopen_it_either(self):
         self.bank_a_red()
         self.run_suite(1, step=5)
         self.assertFalse(self.allow_at(6, self.write(TEST_FILE, "assert True\n")))
-        self.assertEqual(self.state.seal_unlocks, [])
+
+    def test_every_refusal_is_recorded(self):
+        self.bank_a_red()
+        self.run_suite(2, step=5)
+        self.allow_at(6, self.write(TEST_FILE, "assert False\n"))
+        self.allow_at(7, self.write(TEST_FILE, "assert False\n"))
+        self.assertEqual([r[1] for r in self.state.refusals],
+                         [f"sealed: {TEST_FILE}", f"sealed: {TEST_FILE}"])
+
+    def test_an_unsealed_test_file_is_still_fixable_while_the_suite_cannot_run(self):
+        # The recovery path that makes the missing door safe: a NEW file can still be repaired
+        # when it is the thing that broke the suite.
+        self.bank_a_red()
+        self.run_suite(2, step=5)
+        self.assertTrue(self.allow_at(6, self.write("tests/own/test_new.py", "assert True\n")))
 
 
 class TheSuiteTheShippedIsTheSuiteThatWentRed(SplitBase):
@@ -132,7 +153,7 @@ class TheModeVocabularyHoldsTogether(unittest.TestCase):
 
     def test_the_split_block_promises_the_seal(self):
         self.assertIn("sealed", TDD_BLOCKS["split"])
-        self.assertIn("exit 2", TDD_BLOCKS["split"])
+        self.assertIn("no write path left", TDD_BLOCKS["split"])
 
 
 class SealedPerFile(SplitBase):

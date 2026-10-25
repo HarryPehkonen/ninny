@@ -491,6 +491,31 @@ the next one within a single run. That is the argument for the record being the 
 hash comparison at handback cannot be routed around, whatever route is invented -- and for
 treating the mounts as the cheap part that stops the casual case and makes the refusal honest.
 
+### The third live run: two layers, two paths, and the door between them
+
+A `split` arm with the mounts in force STILL changed its sealed suite, and the record says exactly
+how. `test_runs: [[5,1],[7,1],[26,2],[30,0]]` -- at step 26 the suite returned 2, "nothing ran",
+because the model had broken its own source until the tests could not import. `refusals` shows the
+sealed write refused at step 24. `seal_unlocks` shows the same write ALLOWED at step 28 (the field
+was removed along with the door; the run's own record.json keeps it). And
+`suite_changed_after_red: ['tests/own/test_spans.py']` shows it landed, with `sealed_readonly:
+True` -- the mounts were in force the whole time.
+
+They were in force for the wrong path. The read-only binds live inside the bubblewrap namespace,
+so they govern every `bash` action, and the FILE TOOL writes from the harness's own process,
+outside that namespace, where no bind reaches. Two layers were guarding two different paths, and
+the gate had a door -- a suite that could not RUN could be edited again -- so the model only had
+to break its own suite and walk through.
+
+The door is gone, and nothing needs it. The seal is taken at a run that returned 1, so the sealed
+files provably ran; a later exit 2 comes from a new unsealed file (still writable) or from the
+model's own source edits (still writable). Both stay fixable, so removing the door creates no trap
+and leaves a sealed file with no write path from any tool.
+
+The general lesson: when a guarantee is enforced in two places, the guarantee is only as strong as
+the WEAKEST path to the artifact, and each layer's escape hatch is the other layer's hole. Enforce
+at the artifact where you can, and read every refusal rule as a hint about where the next hole is.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)

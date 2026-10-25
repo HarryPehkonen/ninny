@@ -12,6 +12,15 @@ OUT="runs/ab-results.tsv"
 python3 - "$OUT" <<'PY'
 import json, os, re, subprocess, sys, glob
 
+
+def _mode_of(arm):
+    """`ab-<mode>-<i>` -> `<mode>`. Anything unrecognised keeps its own name rather than being
+    filed under a mode it is not, because a wrong mode corrupts the comparison silently."""
+    if arm.startswith("ab-") and arm.count("-") >= 2:
+        return arm.split("-")[1]
+    return arm
+
+
 out_path = sys.argv[1]
 rows = []
 for res in sorted(glob.glob("runs/*/ab-*/result.json")):
@@ -42,9 +51,13 @@ for res in sorted(glob.glob("runs/*/ab-*/result.json")):
     else:
         accepted = ""
 
+    # The mode is in the arm's name, so a NEW mode is picked up instead of being filed under
+    # "off". It was `"enforce" if arm.startswith("ab-enforce") else "off"`, which folded every
+    # new mode into the control arm and quietly inflated it -- the split arms landed in `off`
+    # and lifted its red-first rate before anyone noticed.
     rows.append(dict(
         task=task, arm=arm,
-        mode="enforce" if arm.startswith("ab-enforce") else "off",
+        mode=_mode_of(arm),
         rep=arm.rsplit("-", 1)[-1],
         accepted="" if failed is None else ("1" if failed == 0 else "0"),
         checks="" if checked is None else checked,
@@ -79,7 +92,7 @@ def agg(mode):
                 mean_steps=(sum(steps) / len(steps) if steps else 0), cost=cost)
 
 print("\n%-9s %4s %9s %10s %10s %11s %8s" % ("mode", "n", "accepted", "red-first", "submitted", "mean steps", "cost"))
-for mode in ("off", "enforce"):
+for mode in sorted({r["mode"] for r in rows}):
     a = agg(mode)
     if a:
         print("%-9s %4d %9s %10s %10s %11.1f %8s" % (

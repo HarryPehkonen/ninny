@@ -87,13 +87,15 @@ happened:
 
 From the moment that red is banked, the suite is **sealed**: the tests you hand back
 have to be the tests that failed, because the run records whether they are. Writing
-under {test_globs} is refused for the rest of the run.
+under {test_globs} is refused for the rest of the run, and the files that were red are
+read-only in the shell as well, so nothing you run can rewrite or move them. There is
+no door and no way round it -- a sealed file has no write path left.
 
-One door: a suite that does not RUN -- exit 2, a syntax error, a missing import -- is
-not a suite anyone can be held to, so it may be edited again while it cannot run. A
-suite that ran and FAILED is closed. So take round 1 seriously: a test that passes by
-accident seals nothing, and a test you will want to change later is a test you got
-wrong. If it is wrong, say so in your final message rather than editing the suite.
+So take round 1 seriously: a test that passes by accident seals nothing, and a test you
+will want to change later is a test you got wrong. If a sealed test is wrong and the
+implementation cannot satisfy it, say so in your final message instead of trying to edit
+it. Handing back a red suite is allowed, and a truthful one is worth more than a green
+one. You may still ADD new test files; the record counts them separately.
 
 {not_a_red}
 
