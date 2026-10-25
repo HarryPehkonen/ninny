@@ -608,6 +608,21 @@ Enforcing it would be the same shape as `submit on a red tree`, which DID fire o
 and was recorded: carry `last_run_step` and `last_src_step`, and nudge the first submit when the suite
 has not run since the last source write. Stated but not yet enforced -- one rule, one arm of evidence.
 
+**Three arms, not one (same task).** When the rest of the `bits` arms landed: 0 of 3 accepted, all three
+for the identical reason -- `ok the acceptance corpus builds and passes` together with `FAIL the
+submission's own tests do not pass`. bits-1: last run step 8, then 21 steps of work, submitted. bits-2:
+last run step 29, then StepLimit, never submitted. bits-3: last run step 15, submitted. Three
+independent arms wrote correct code and handed back a suite they had never once seen pass. The
+implementation was never the problem.
+
+**And the oracles do not agree on what a finished job is.** bits fails a handback whose suite is red;
+spans accepts one -- 3 of 3, with the last observed run red for every arm. Same protocol, two standards,
+so the accepted column is not comparable across tasks and any "acceptance rate" is partly a statement
+about which oracle the arm happened to draw. The seal makes it worse than merely inconsistent: a sealed
+test that is wrong cannot be repaired, so bits' gate is one the model is forbidden to meet. Arm 1
+diagnosed its boundary guard in a comment, in a new file, because the sealed one had no write path. A
+gate the harness itself blocks is a trap, not a standard.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)
