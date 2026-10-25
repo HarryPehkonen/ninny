@@ -14,11 +14,18 @@ import json, os, re, subprocess, sys, glob
 
 
 def _mode_of(arm):
-    """`ab-<mode>-<i>` -> `<mode>`. Anything unrecognised keeps its own name rather than being
-    filed under a mode it is not, because a wrong mode corrupts the comparison silently."""
-    if arm.startswith("ab-") and arm.count("-") >= 2:
-        return arm.split("-")[1]
-    return arm
+    """`ab-<label>-<i>` -> `<label>`.
+
+    The label is whatever the arm was called between `ab-` and its index, so a run can be
+    labelled for what it was testing (`ab-enforce-notice-1` -> `enforce-notice`) rather than
+    every variant of a mode being filed under the mode's bare name.
+
+    This used to be `"enforce" if arm.startswith("ab-enforce") else "off"`, which filed every
+    NEW mode under the control arm -- the five split arms were counted as `off` and lifted its
+    red-first rate from 13% to 28% before anyone noticed.
+    """
+    m = re.match(r"^ab-(.+)-\d+$", arm)
+    return m.group(1) if m else arm
 
 
 out_path = sys.argv[1]

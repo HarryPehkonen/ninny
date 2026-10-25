@@ -60,6 +60,8 @@ TDD_BLOCKS = {
 Write tests for the behaviour you implement. There is no rule about the order in
 which you write them.
 
+{seal}
+
 """,
     "enforce": """## Testing (ENFORCED in this run)
 
@@ -71,6 +73,8 @@ happened:
 You must write a test -- under {test_globs} -- and **see it fail** before any
 implementation is accepted: writes into the source tree are refused until then, and the
 harness watches the source tree to confirm the refusal was not routed around.
+
+{seal}
 
 {not_a_red}
 
@@ -105,10 +109,31 @@ one. You may still ADD new test files; the record counts them separately.
 Implement first if you like. Before you may submit, you must write tests for what
 you implemented and run them.
 
+{seal}
+
 {not_a_red}
 
 """,
 }
+
+#: What the record does with the suite, said in every mode that TELLS the model anything.
+#:
+#: `enforce` and `request` tell (one blocks as well, one does not), and both were silent about
+#: the seal until now -- which is how a mode can promise one thing and measure another. The seal
+#: runs in every mode that banks a red, so the told modes have to say so.
+#:
+#: `off` stays silent on purpose. It is the control arm of the A/B: the seal still runs and is
+#: still recorded there, but the arm is never told, so its number stays a measurement of what a
+#: model does unprompted rather than one of what it was asked for. Silence in `off` is a design
+#: choice with a test on it, not an oversight.
+SEAL_NOTICE = """## The suite is compared at handback
+
+The record compares the test files you hand back against the test files that were red.
+Change a file that was red -- with `write_file`, from the shell, or by moving it out of the
+way -- and the run is recorded as a broken seal, and "a failing test was seen first" stops
+meaning what a reader would take it to mean. Test files you ADD afterwards are allowed and
+counted separately. If a test turns out to be wrong, report it in your final message rather
+than editing it: an honest red is worth more than an edited green."""
 
 
 def render_instance(task, workdir: str, tdd_mode: str, sandbox_note: str) -> str:
@@ -119,6 +144,7 @@ def render_instance(task, workdir: str, tdd_mode: str, sandbox_note: str) -> str
         tdd_block.replace("{test_globs}", ", ".join(task.test_globs))
         .replace("{phases}", phases_block())
         .replace("{not_a_red}", NOT_A_RED)
+        .replace("{seal}", SEAL_NOTICE)
     )
     return INSTANCE_TEMPLATE.format(
         spec=task.spec.strip(),

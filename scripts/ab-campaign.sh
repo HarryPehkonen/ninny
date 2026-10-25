@@ -23,7 +23,7 @@ STATES="${AB_STATES:-off enforce}"
 for t in $TASKS; do
   for mode in $STATES; do
     for i in $(seq 1 "$ARMS"); do
-      name="ab-$mode-$i"
+      name="ab-${AB_LABEL:-$mode}-$i"
       dir="runs/$t/$name"
       if [ -f "$dir/result.json" ]; then
         echo "skip  $t/$name  (already recorded)"

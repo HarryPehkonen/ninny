@@ -27,7 +27,8 @@ from types import SimpleNamespace
 from ninny import SUBMIT_SENTINEL
 from ninny.config import Task
 from ninny.prompt import render_instance
-from ninny.tdd import PHASE_JOBS, PHASE_LABELS, PHASE_ORDER, TDDPolicy, phase_line, phases_line
+from ninny.tdd import (
+    MODES, PHASE_JOBS, PHASE_LABELS, PHASE_ORDER, TDDPolicy, phase_line, phases_line)
 
 
 class FakeTask:
@@ -78,6 +79,34 @@ class VocabularyTests(unittest.TestCase):
         text = render_instance(FakeTask(), "/work", "off", "note")
         self.assertNotIn("RED-FIRST", text)
         self.assertNotIn("GREEN", text)
+        # `off` is the control arm: it is not told about the seal either. The seal still runs and
+        # is still recorded there, so this silence is what keeps its number a measurement of what
+        # the model does unprompted rather than one of what it was asked for.
+        self.assertNotIn("compared at handback", text)
+
+    def test_every_mode_that_tells_the_model_anything_explains_the_seal(self):
+        # The seal runs in every mode that banks a red, so a mode that says nothing about it is
+        # promising one thing and measuring another -- which is exactly how `enforce` arms came to
+        # rewrite their own red suite in five of eight runs while the prompt said nothing.
+        for mode in MODES:
+            text = render_instance(FakeTask(), "/work", mode, "note")
+            self.assertNotIn("{seal}", text, f"mode {mode} left the placeholder unrendered")
+            if mode == "off":
+                # The control arm stays silent -- see the note on SEAL_NOTICE.
+                self.assertNotIn("compared at handback", text)
+                self.assertNotIn("sealed", text)
+                continue
+            # `split` spells the same promise out at greater length, so accept its own wording:
+            # it is enforced as well as told, and its paragraph names the read-only binds.
+            self.assertTrue(
+                "compared at handback" in text or "sealed" in text,
+                f"mode {mode} does not tell the model the suite is compared at handback",
+            )
+
+    def test_the_seal_notice_says_the_two_things_that_make_it_fair(self):
+        text = render_instance(FakeTask(), "/work", "enforce", "note")
+        self.assertIn("ADD", text)              # adding test files is still allowed
+        self.assertIn("final message", text)    # and that is where a wrong test should be reported
 
     def test_reverse_gets_the_definition_without_the_opposite_order(self):
         text = render_instance(FakeTask(), "/work", "reverse", "note")
