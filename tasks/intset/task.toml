@@ -24,7 +24,7 @@ src_globs = ["src/**"]
 protected_globs = ["Cargo.toml", "src/main.rs", "tools/**", "tests/own/README.md"]
 # Must work INSIDE the sandbox, or a run is not scored.
 preflight = ["cargo --version", "rustc --version"]
-step_limit = 35
+step_limit = 45
 timeout_s = 180
 test_timeout_s = 300
 

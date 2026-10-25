@@ -14,6 +14,10 @@ fixed_tree = "fixed"
 # was left to carry the semantics.
 oracle = "oracle"
 oracle_cmd = "bash oracle/accept.sh"
+# A planted failing test, so `ninny verify-task` can require this task's own runner to report
+# a red as a red rather than as "nothing ran". The stub src/ is empty, so the recipe also plants
+# a compiling placeholder: the control must not depend on a solution existing.
+probe_cmd = "bash oracle/probe.sh"
 
 # The agent's own loop: compiles its tests with its sources under -Werror, treats a
 # build error as a build error rather than a RED, and refuses to call a suite that
@@ -32,3 +36,15 @@ step_limit = 40
 timeout_s = 120
 # Each test action compiles the suite, so this is generous on purpose.
 test_timeout_s = 300
+
+[runner]
+about = 'C++17 / g++, one own binary built from every tests/own/*.cpp.'
+note = '''include/cronx and tests/harness.hpp are frozen: the signatures are not yours to change.
+The harness prints "<label>: N checked, M failed" whatever label the author chose, and
+"0 checked, 0 failed" is a suite that asserted nothing -- exit 2, not a pass. In C++ a case that
+does not compile is not a red, so declare the frozen signature and return a placeholder: the case
+then compiles and fails on its CHECK.'''
+require = 'tests/own/*.cpp'
+build = 'mkdir -p build && g++ -std=c++17 -Wall -Wextra -Wpedantic -Werror -Iinclude -Itests src/*.cpp tests/own/*.cpp -o build/own'
+run = './build/own'
+sum = '.*: ([0-9]+) checked,'

@@ -302,10 +302,12 @@ weeks.
 The control stages the tree the agent starts from, runs that recipe, runs the task's own
 `test_cmd`, and requires **exit 1**. `0` means the suite cannot see a red; `2` means the runner
 misreports a red as a build error; a recipe that does not land is reported as the recipe's
-fault, never the runner's. Eight unit tests in `tests/test_verify_runner_truth.py`, and all six
+fault, never the runner's. Eight unit tests in `tests/test_verify_runner_truth.py`, and all eight
 published tasks now declare one and verify with *"3 controls ran"*. A task without `probe_cmd`
 is still verified and says which control did not run: not a runner that lies, a runner nobody
-has asked yet.
+has asked yet. **The recipe has to make the tree COMPILE**: `cron`'s stub ships an empty `src/`,
+so its probe plants a placeholder translation unit alongside the failing case — a control that
+depends on a solution existing stops working exactly when the stub changes.
 
 **The dataset was wrong on the first attempt, and four real tasks said so.** Sabotaging the
 ANSWER KEY asks the runner nothing: the answer key carries no suite (the agent writes that), so

@@ -14,6 +14,9 @@ fixed_tree = "fixed"
 # beside the oracle and runs it there.
 oracle = "oracle"
 oracle_cmd = "bash oracle/gate.sh"
+# A planted failing test, so `ninny verify-task` can require this task's own runner to report
+# a red as a red rather than as "nothing ran".
+probe_cmd = "bash oracle/probe.sh"
 
 # The agent's own test loop: ninny's full suite, which must keep passing, plus any
 # test the agent adds under tests/.
@@ -27,3 +30,12 @@ preflight = ["python3 -V"]
 step_limit = 30
 timeout_s = 120
 test_timeout_s = 180
+
+[runner]
+about = 'Python / unittest. Your suite is every tests/test*.py.'
+note = '''discover -s tests -t . is deliberate: the tests import the package beside them, so the repo
+root is the import root. A suite that does not even import prints no summary line, and "Ran 0
+tests" is not a pass -- either way zero cases ran, which is exit 2, not a green.'''
+run = 'python3 -m unittest discover -s tests -t .'
+build_fail = '_FailedTest|Failed to import test module|^SyntaxError|^IndentationError'
+sum = '^Ran ([0-9]+) tests?'

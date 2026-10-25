@@ -7,7 +7,9 @@ what makes it work on a Rust crate and a NASM project it has never seen.
 The price is paid in each task's **adapter**: the script `run_tests` calls, which has to answer
 the contract on behalf of a toolchain that does not speak it. For the first six tasks those were
 hand-written -- 41 to 72 lines each, three to five hand-rolled `exit 2` guards each, no two
-alike -- and **every defect of the 2026-10-23 campaign lived in that layer**, not in the harness:
+alike -- and **every defect of the 2026-10-23 campaign lived in that layer**, not in the harness.
+All eight tasks now declare a `[runner]` config; `cron` and `ninny-gate` were converted last, and
+they were the only two whose case count never reached the record:
 
 | what went wrong | what it cost |
 |---|---|
@@ -104,7 +106,7 @@ rc != 0                  -> 1
 otherwise                -> 0
 ```
 
-## The six adapters, as they are
+## The eight adapters, as they are
 
 ```toml
 # roman -- Python / unittest
@@ -141,12 +143,25 @@ require = 'tests/own/*.cpp'
 build   = 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build --target own_tests'
 run     = './build/own_tests'
 sum     = '.*: ([0-9]+) checked,'
+
+# cron -- C++17 / g++, a direct compile with the frozen harness
+require = 'tests/own/*.cpp'
+build   = 'mkdir -p build && g++ -std=c++17 -Wall -Wextra -Wpedantic -Werror -Iinclude -Itests src/*.cpp tests/own/*.cpp -o build/own'
+run     = './build/own'
+sum     = '.*: ([0-9]+) checked,'
+
+# ninny-gate -- Python / unittest over this repo's own suite
+run        = 'python3 -m unittest discover -s tests -t .'
+build_fail = '_FailedTest|Failed to import test module|^SyntaxError|^IndentationError'
+sum        = '^Ran ([0-9]+) tests?'
 ```
 
 ## The traps, each with the transcript that proves it
 
 The rule is not "these tools are strange"; it is that **a tool's exit code is not the contract**,
-and the config says where it lies. Recorded transcripts live in `tests/fixtures/runners/`.
+and the config says where it lies. Recorded transcripts live in `tests/fixtures/runners/`
+(`cron` and `ninny-gate` have no recordings yet: their verdicts are exercised by `verify-task`'s
+third control, which plants a failing case in the tree, rather than by a replay).
 
 - **Cargo exits `101` for a compile error and for a failing test.** `build_fail` is what separates
   them: `error[E0308]: mismatched types` and `error: could not compile` mean nothing ran;
