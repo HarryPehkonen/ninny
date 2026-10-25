@@ -546,6 +546,37 @@ suite is tempting. That is the same object the outcome claim needs -- one task, 
 it exists the notice stays unmeasured, which is not the same as wrong: a rule nobody states is a
 trap, and stating it costs a paragraph.
 
+### The trap was real, and it did not bite (2026-10-25)
+
+`tasks/jsonptr` was built to discriminate. RFC 6901 section 3 says to transform `~1` to `/` and THEN
+`~0` to `~`, and section 5's example table contains `~1` and `~0` and nothing whose decoding depends
+on the order -- so the order-backwards implementation passes every example in the specification it is
+being tested against. Pre-flighted offline before any arm was spent: five plausible-wrong
+implementations, each passing all 12 RFC examples, each caught by the oracle; and the suite an
+example-driven reader would write catches none of them.
+
+Then two `enforce` arms. Both accepted, both `red-first`, both seals held, and their own suites killed
+all five mutants. Arm 1's suite contains a case named, literally:
+
+    test('~01 decodes to ~1, not to /', () => { ... })
+
+The discriminator, named. Nothing was skimmed, and nothing was routed around.
+
+The mechanism is in the step count: 12 and 14 steps, for a task with a single concern. One subtle rule
+gives a careful model attention to spare, and this model spent it exactly where the trap was. Two
+designed tasks now say the same thing -- `spans` (5 enforce arms, 5/5 accepted) and `jsonptr` (2/2
+accepted, 5/5 mutants killed) -- so the working hypothesis changes shape: **what separates a careful
+run from a hasty one here is breadth, not depth.** Many requirements competing for the same attention
+is a different problem from one rule that is easy to get wrong, and only the first has been shown to
+matter.
+
+The standing finding is unchanged and now harder to argue with: **the corpus has never produced a
+submitted-and-wrong arm.** Test-first cannot show up as a better OUTCOME where the first attempt is
+already right, and on small, single-concern tasks the first attempt is right. The harness's measurable
+effects are elsewhere, and they are real: the order of the writes (13% -> 100% red-first), the artifact
+at handback (the seal, and the routes around it that the record caught), and now the teeth of the suite
+an arm ships (5 of 5 mutants killed, measured per arm -- a property that could have failed and did not).
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)
