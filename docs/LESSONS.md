@@ -404,6 +404,34 @@ what it means. The strong version -- tests frozen so the shipped suite IS the re
 protocol change (two rounds, the test tool removed in the second), and it belongs after this,
 not instead of it.
 
+### The first `split` run: the refusal was routed around, and the seal caught it
+
+The two-round protocol (`--tdd split`) refuses writes under the test globs once a red is banked.
+On its first live run that refusal did not hold. The arm wrote its test at step 3, banked the red
+at step 4, wrote the implementation at step 5 -- and when its own test then failed against that
+implementation it rewrote the test at step 12 through `python3 - <<'PY'` in a bash action. The
+gate saw nothing (`refusals` holds only the submit-on-red rule from step 10) and the run finished
+`suite_frozen=no (1 test file(s) changed after the red: tests/own/test_spans.py)`. The model's own
+step-12 output is two words: `ok / edited`.
+
+Three things this settles:
+
+  * the gate constrains the write TOOL, not the capability. `bash` is the whole shell and a
+    heredoc is not a `write_file`, so the state-scoped toolset alone would not have stopped this
+    either -- removing a tool does not remove the shell;
+  * the seal is the guarantee and the refusal is a nudge. That is the right order of confidence:
+    the seal is read from bytes and cannot be routed around;
+  * the run log keeps only the first line of a command (`python3 - <<'PY'` and nothing more), so
+    the record can say the suite moved but cannot name the command that moved it. The tool output
+    was the only trace. Attribution is a recorder gap, not a guarantee gap.
+
+The structural version follows from this and is cheap: every bash action already runs in its own
+bwrap namespace, and `--ro-bind` is already how the rest of the machine is hidden. Binding the
+sealed test FILES read-only for the remainder of the run is enforcement the shell cannot route
+around. Two calls belong to the keeper: seal each file or the whole directory (per-file still lets
+the model ADD tests, which is often good work), and does the seal mean "nothing changed" or
+"nothing that was red changed".
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)

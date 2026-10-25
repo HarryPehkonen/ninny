@@ -75,6 +75,29 @@ harness watches the source tree to confirm the refusal was not routed around.
 {not_a_red}
 
 """,
+    "split": """## Testing (TWO ROUNDS in this run)
+
+Round 1 is the tests. Round 2 is the implementation, and it starts the moment a test
+you wrote has been **seen to fail**. Writes into the source tree are refused until then.
+
+Two phases, in order, and the record says which one you were in when each thing
+happened:
+
+{phases}
+
+From the moment that red is banked, the suite is **sealed**: the tests you hand back
+have to be the tests that failed, because the run records whether they are. Writing
+under {test_globs} is refused for the rest of the run.
+
+One door: a suite that does not RUN -- exit 2, a syntax error, a missing import -- is
+not a suite anyone can be held to, so it may be edited again while it cannot run. A
+suite that ran and FAILED is closed. So take round 1 seriously: a test that passes by
+accident seals nothing, and a test you will want to change later is a test you got
+wrong. If it is wrong, say so in your final message rather than editing the suite.
+
+{not_a_red}
+
+""",
     "reverse": """## Testing
 
 Implement first if you like. Before you may submit, you must write tests for what

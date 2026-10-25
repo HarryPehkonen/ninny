@@ -29,7 +29,7 @@ from pathlib import Path
 from ninny.artifacts import is_ignored
 from ninny.env import FAILED_EXIT, NOTHING_RAN_EXIT, PASSED_EXIT
 
-MODES = ("off", "request", "enforce", "reverse")
+MODES = ("off", "request", "enforce", "reverse", "split")
 
 
 # The phases the run moves through, named so the MODEL is told where it is. The state has
@@ -105,6 +105,9 @@ class TDDState:
     seal_step: int | None = None
     suite_frozen_since_red: bool | None = None
     suite_changed_after_red: list[str] = field(default_factory=list)
+    # Steps where the sealed suite was opened again because it could not run at all. A
+    # `frozen` verdict means less if the door was opened, so the record carries the door.
+    seal_unlocks: list[list] = field(default_factory=list)
 
     @property
     def own_gate_red(self) -> bool:
@@ -153,6 +156,7 @@ class TDDState:
             "seal_step": self.seal_step,
             "suite_frozen_since_red": self.suite_frozen_since_red,
             "suite_changed_after_red": self.suite_changed_after_red,
+            "seal_unlocks": self.seal_unlocks,
         }
 
 
@@ -234,7 +238,7 @@ class TDDPolicy:
                 state.refusals.append([step, "submit on a red tree"])
                 return self._red_tree_message()
 
-        if self.mode != "enforce":
+        if self.mode not in ("enforce", "split"):
             return ""
 
         # A path that never lands inside the working tree cannot be a legitimate
@@ -242,6 +246,22 @@ class TDDPolicy:
         if path and self._lands_outside(path):
             state.refusals.append([step, f"outside: {path}"])
             return self._refusal_message(path, phase=state.phase)
+
+        # `split`: two rounds are the protocol. Once a red is banked the suite is sealed, so
+        # the tests that ship have to be the tests that went red -- a guarantee `enforce`
+        # cannot give, because it orders the writes and says nothing about the artifact.
+        #
+        # The door opens for exactly one case: a suite that does not RUN. You may fix a suite
+        # the runner could not collect (exit 2, "nothing ran"); you may not change one that
+        # ran and failed. Without that, a typo in a test file strands the run, and Ninny does
+        # not build traps -- refusals elsewhere are refused once and then let through.
+        if self.mode == "split" and state.phase != "test":
+            if action.name == "write_file" and self.task.is_test_path(rel):
+                if self._suite_cannot_run(state):
+                    state.seal_unlocks.append([step, rel])
+                else:
+                    state.refusals.append([step, f"sealed: {rel}"])
+                    return self._sealed_message(rel, state.seal_step)
 
         if state.phase != "test":
             return ""
@@ -342,6 +362,27 @@ class TDDPolicy:
             + "\n"
             "This is not a hint about style: the run records whether a failing test was seen "
             "first, and it cannot be recorded if it did not happen."
+        )
+
+    @staticmethod
+    def _suite_cannot_run(state: TDDState) -> bool:
+        """The last run could not collect the suite, so there is nothing sealed yet.
+
+        Exit 2 is the contract's "nothing ran": a typo, a missing import, a build error. It is
+        not a red, and it is not a suite anyone can be held to.
+        """
+        return bool(state.test_runs) and state.test_runs[-1][1] == NOTHING_RAN_EXIT
+
+    def _sealed_message(self, rel: str, sealed_at) -> str:
+        return (
+            f"Refused ({rel} is sealed in this run). A red was banked at step {sealed_at}, and "
+            "from there the suite is frozen -- the tests handed back have to be the tests that "
+            "failed, and the record says whether they are.\n"
+            f"You are in {phase_line('impl')}. Write the implementation under "
+            f"{', '.join(self.task.src_globs)} and run the suite as often as you like.\n"
+            "One door: a suite that does not RUN -- exit 2, a syntax error, a missing import -- "
+            "is not a suite anyone can be held to, so it may be edited again while it cannot "
+            "run. A suite that ran and FAILED is closed for the rest of the run."
         )
 
     # ------------------------------------------------------------------- observe
