@@ -421,12 +421,12 @@ any files at all.
 
 ### The format is not Python-shaped
 
-Six tasks ship here — `roman`, `dur`, `intset`, `nasm-sum`, `bits`, `roman-cli` — across five
-languages and four test runners, each with its oracle and its answer key (`fixed/`). They are
-**worked examples of the format**, not a benchmark: **a benchmark whose answer key is public
-is not a benchmark.** If you want to score models on one of them, keep its `oracle/` and
-`fixed/` out of your published tree — everything needed to grade lives there, and everything
-a model must not see lives there too.
+Eight tasks ship here — `roman`, `dur`, `intset`, `nasm-sum`, `bits`, `roman-cli`, `cron`,
+`ninny-gate` — across five languages and four test runners, each with its oracle and its answer
+key (`fixed/`). They are **worked examples of the format**, not a benchmark: **a benchmark whose
+answer key is public is not a benchmark.** If you want to score models on one of them, keep its
+`oracle/` and `fixed/` out of your published tree — everything needed to grade lives there, and
+everything a model must not see lives there too.
 
 The same format does run other languages and other test runners. A C++ task — a cron
 expression parser with bitmask semantics, frozen headers, graded by 122 acceptance checks

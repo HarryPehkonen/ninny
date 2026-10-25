@@ -1,0 +1,34 @@
+name = "cron"
+spec_file = "SPEC.md"
+tree = "tree"
+
+# A solved tree, used ONLY by `ninny verify-task` to prove the oracle can pass. It is
+# the reference implementation from the rig this task came from
+# (cpp-model-eval/control/cron/src/cronx.cpp). It lives beside the oracle, outside
+# tree/, and is never copied into a run: an oracle that only ever fails proves nothing.
+fixed_tree = "fixed"
+
+# The acceptance corpus lives OUTSIDE the tree, deliberately. The rig showed the corpus
+# to the model -- there it was the definition of correct. Here a suite written from the
+# answer key would prove nothing about the work, so the corpus moved out and the spec
+# was left to carry the semantics.
+oracle = "oracle"
+oracle_cmd = "bash oracle/accept.sh"
+
+# The agent's own loop: compiles its tests with its sources under -Werror, treats a
+# build error as a build error rather than a RED, and refuses to call a suite that
+# reported no checks a pass. The contract is the exit code Ninny reads:
+#   0 tests ran and passed | 1 tests ran and failed (a RED) | 2 nothing ran
+test_cmd = "bash tools/run_own_tests.sh"
+
+test_globs = ["tests/own/**"]
+src_globs = ["src/**"]
+# The instrument: the frozen contract and the test harness the suite is built on.
+protected_globs = ["include/**", "tests/harness.hpp", "tools/**"]
+
+# Must work INSIDE the sandbox, or a run is not scored.
+preflight = ["g++ --version"]
+step_limit = 40
+timeout_s = 120
+# Each test action compiles the suite, so this is generous on purpose.
+test_timeout_s = 300

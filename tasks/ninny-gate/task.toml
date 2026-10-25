@@ -1,0 +1,29 @@
+name = "ninny-gate"
+spec_file = "SPEC.md"
+tree = "tree"
+
+# A tree in which this task is already solved, used ONLY by `ninny verify-task` to
+# prove the oracle can pass. It is the repo one commit AFTER the fix the task is about
+# (`git archive 33b9ca1 ninny tests ...`), while tree/ is the commit before it, so the
+# two trees differ in exactly the one defect. It sits beside the oracle, outside
+# tree/, and is never copied into a run.
+fixed_tree = "fixed"
+
+# The acceptance suite lives OUTSIDE the tree, so the agent cannot read the answer
+# key and write its tests from it. `ninny check` stages a copy of the submission
+# beside the oracle and runs it there.
+oracle = "oracle"
+oracle_cmd = "bash oracle/gate.sh"
+
+# The agent's own test loop: ninny's full suite, which must keep passing, plus any
+# test the agent adds under tests/.
+test_cmd = "bash tools/run_own_tests.sh"
+
+test_globs = ["tests/**"]
+src_globs = ["ninny/**"]
+protected_globs = ["tools/**"]
+
+preflight = ["python3 -V"]
+step_limit = 30
+timeout_s = 120
+test_timeout_s = 180

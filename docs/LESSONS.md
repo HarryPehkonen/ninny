@@ -420,11 +420,19 @@ working clone, published tree 149 files against 238 tracked, and the published `
 this repo did not even have.
 
 **The fix is to stop tracking what must not ship, not to keep rewriting it out.** The two tasks
-became ignored (`tasks/cron/`, `tasks/ninny-gate/` in `.gitignore`): they stay on disk and in
-this working copy, and a fresh clone has no way to learn they exist. One `filter-branch` removed
-them from all 37 commits, `master` became `main`, and publishing became `git push`. A bundle of
-the pre-rewrite history sits outside the repo (`_backups/`), because a history rewrite with no
-undo is not a decision, it is a trap.
+were ignored for a few hours — on disk, invisible to a fresh clone — and then published as well,
+once the trade was actually weighed: nothing in them is a secret (a scan found no keys, no tokens,
+no absolute paths, no addresses; the only `sk-` strings in them are `sk-whatever` in a sample
+config), and contamination risk is proportional to what gaming the benchmark is worth. One
+`filter-branch` removed them from all 37 commits, `master` became `main`, and publishing became
+`git push`. A bundle of the pre-rewrite history sits outside the repo (`_backups/`), because a
+history rewrite with no undo is not a decision, it is a trap.
+
+**Removal is not unpublishing.** A pushed commit lives on in GitHub's history, in forks, and in
+whatever scraped it; deleting the files at the tip fixes nothing. So the honest rule is: publish
+only what you would be content to have permanently public, and if you need an uncontaminated
+benchmark later, build tasks that were never public. That is a decision made once, about the
+future — not a switch you can flip back.
 
 **The generalisation: if publishing needs a ritual, the repo is tracking something it should not.**
 Force, filtering, and "remember to run the gate by hand" were all consequences of one directory
