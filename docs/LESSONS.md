@@ -662,6 +662,41 @@ stories about the same file. The fix was to give the bind to the mode whose clai
 (`split`) and leave the seal as telemetry everywhere else. A layer should be able to say which
 claim it is enforcing; if it cannot, it is guarding something nobody promised.
 
+**And the command is not the function.** `ninny verdict`'s unit tests all passed -- they called
+`cmd_verdict` directly -- and `ninny verdict <run>` died inside `main()` with
+`AttributeError: 'Namespace' object has no attribute 'no_log'`, because the flag is spelled once in
+a loop over the subparsers and the new parser was registered after it. Every test called the
+function; the user calls the door. `tests/test_cli_surface.py` now walks the commands and refuses
+one that cannot take the shared flags. Run the command, not the thing you wrote a test for.
+
+**A pipeline inside a preflight reports the wrong exit code.** Probing a worktree inside bwrap:
+`git rev-parse HEAD` failed with "not a git repository" while `git status --porcelain | head -2`
+came back ok, because a shell pipeline exits with the status of its last command. The probe was
+mine, but the lesson is the harness's: an oracle, a preflight or a gate that pipes has an exit code
+that means something other than what it is read as. Only the first command's status is evidence.
+
+**A rule that cannot be satisfied is indistinguishable from a broken harness.** `ninny run --repo`
+defaults to `request`, and takes `enforce` only once `--test-glob` says which files are the tests.
+The plan for this door recommended `enforce` by default, and on a repository whose suite is green
+that is a deadlock: every way to make a red is itself a write, and the gate refuses writes until a
+red. Two more of the same shape sat beside it -- an empty `test_globs` would leave `red_ok` false
+forever and report every repository run as `no-tests`, and `src_globs = ["**"]` would make the
+model's own test file a source file that the gate then refuses. Before adding a gate, ask what a
+run could DO to satisfy it; if the answer needs a step the gate also blocks, it is not strictness.
+
+**A patch against a moving tree is not a patch.** Ninny's first repository run produced a 30.8 MB
+diff with 2,224 file headers and 482,462 removed lines for a change of ten, because the patch
+compared the LIVE tree against the worktree: a commit landing mid-run read as the delegate deleting
+it, and every gitignored file on disk read as another deletion. Diff the worktree against the
+commit it was staged at -- and stage first, or a file the delegate created is missing from a diff
+that otherwise claims to be its work.
+
+**A claim in a commit message is still a claim.** One commit here said `ninny run` "still returns 0
+when the process finished". The line returns 0 only for `Submitted`; the real gap is narrower and
+worse -- a submitted run returns 0 whatever the artifact says, which is how an arm with four shell
+bypasses read as accepted. It took a correction commit, which is the cheap version of the problem.
+Read the line before describing it.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)
