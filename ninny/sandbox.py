@@ -87,13 +87,20 @@ class BwrapSandbox(Sandbox):
     name = "bwrap"
     can_seal_readonly = True
 
-    def __init__(self, binary: str, share_net: bool = False, binds: list[str] | tuple[str, ...] = ()):
+    def __init__(
+        self,
+        binary: str,
+        share_net: bool = False,
+        binds: list[str] | tuple[str, ...] | None = None,
+    ):
         self.binary = binary
         self.share_net = share_net
         # Extra paths this task's toolchain needs, exposed read-only at the same location.
         # Without them a task whose interpreter lives under a home directory cannot run at
         # all, and the refusal looks like the model's fault.
-        self.binds = [str(path) for path in binds if path]
+        # `None` is what a caller with nothing to add passes, and it means the same as the
+        # empty list: no extra binds.
+        self.binds = [str(path) for path in (binds or ()) if path]
 
     def wrap(self, command: str, workdir: Path) -> list[str]:
         tree = str(workdir)
@@ -240,7 +247,7 @@ def build_sandbox(
     kind: str,
     bwrap_path: str | None = None,
     share_net: bool = False,
-    binds: list[str] | tuple[str, ...] = (),
+    binds: list[str] | tuple[str, ...] | None = None,
 ) -> Sandbox:
     if kind == "none":
         return Sandbox()
