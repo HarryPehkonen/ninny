@@ -26,7 +26,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from ninny import UPSTREAM, UPSTREAM_URL, __version__, logs
+from ninny import UPSTREAM, UPSTREAM_URL, __version__, logs, verdict
 from ninny.agent import Agent
 from ninny.artifacts import write_diff
 from ninny.config import ConfigError, load_task
@@ -289,6 +289,40 @@ def cmd_check(args: argparse.Namespace) -> int:
     print(output.rstrip())
     print(f"\nexit {code}   log: {work / 'oracle.log'}")
     _record(args, task=task.name, verdict=_last_line(output))
+    return code
+
+
+# ---------------------------------------------------------------- verdict
+
+
+def cmd_verdict(args: argparse.Namespace) -> int:
+    """Say whether a run's handback is evidence, in one line, and exit with the answer.
+
+    The exit code is the API: 0 artifact present, 1 handed back unproven (`reasons` says how),
+    2 nothing was handed back. A caller applies the patch on 0 and can say why; a caller that
+    refuses on 1 routes on `reasons`; a caller that sees 2 knows no delegate opinion is being
+    graded at all.
+    """
+    where = Path(args.run).expanduser()
+    run_dir = where if where.is_dir() else where.parent
+    record = where / "result.json" if where.is_dir() else where
+    if not record.is_file():
+        print(json.dumps({"verdict": "no-handback", "exit": verdict.EXIT_NO_HANDBACK,
+                          "run": str(where), "reasons": [f"no result.json at {where}"]},
+                         sort_keys=True))
+        return verdict.EXIT_NO_HANDBACK
+    try:
+        result = json.loads(record.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        print(json.dumps({"verdict": "no-handback", "exit": verdict.EXIT_NO_HANDBACK,
+                          "run": str(run_dir), "reasons": [f"unreadable record: {error}"]},
+                         sort_keys=True))
+        return verdict.EXIT_NO_HANDBACK
+    code, line = verdict.verdict_of(result)
+    line["run"] = str(run_dir)
+    patch = run_dir / "diff.patch"
+    line["patch"] = str(patch) if patch.is_file() else None
+    print(json.dumps(line, sort_keys=True))
     return code
 
 
@@ -679,6 +713,11 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--out", help="where to stage the check (default: $TMPDIR/ninny-checks/<task>)")
     check.set_defaults(func=cmd_check)
 
+    verdict_parser = sub.add_parser(
+        "verdict", help="say whether a run's handback is evidence, in one line")
+    verdict_parser.add_argument("run", help="a run directory, or the path to its result.json")
+    verdict_parser.set_defaults(func=cmd_verdict)
+
     verify = sub.add_parser(
         "verify-task",
         help="prove a task's oracle fails where it must and passes where it must",
@@ -705,8 +744,10 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.set_defaults(func=cmd_doctor)
 
     # One flag on every subcommand, spelled once. A harness that writes into your home
-    # directory had better have an off switch.
-    for subparser in (run, check, verify, doctor, runner):
+    # directory had better have an off switch. `build_parser`'s own test walks the commands and
+    # refuses a subparser that never joined this loop -- `verdict` shipped without it once and
+    # every unit test passed while the real command died in `main()`.
+    for subparser in (run, check, verdict_parser, verify, doctor, runner):
         subparser.add_argument("--no-log", action="store_true",
                                help="no transcript log and no history line for this invocation")
     return parser
