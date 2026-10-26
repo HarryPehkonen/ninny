@@ -1,9 +1,14 @@
 """What the model may do, and how a reply turns into actions.
 
-Four actions, and no more unless a measured failure justifies one:
+Five actions, and no more unless a measured failure justifies one: `edit_file` earned its place
+because on `tasks/dogfood-stamp` three of three arms reached for a shell heredoc to change part of
+a file that `write_file` would have had to regenerate whole, and every one of those writes was
+caught by the bypass detector afterwards. The measured failure was a missing tool, not a missing
+wall:
 
     bash         run a shell command in the working tree
     write_file   write a file, creating parent directories
+    edit_file    replace one exact occurrence of text in an existing file
     read_file    read a file, optionally a line range
     run_tests    run the task's own test command and report its exit status
 
@@ -48,7 +53,7 @@ TOOLS: list[dict] = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Write a file, creating parent directories. Use this instead of a heredoc.",
+            "description": "Write a file, creating parent directories. Use this instead of a heredoc. This replaces the whole file: to change part of a file you did not just write, use edit_file.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -56,6 +61,27 @@ TOOLS: list[dict] = [
                     "content": {"type": "string", "description": "The complete file content."},
                 },
                 "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": (
+                "Change part of an existing file: replace old_string with new_string. old_string "
+                "must appear exactly once, so copy it from read_file with its whitespace intact and "
+                "include enough context to be unique. Zero or several matches is refused, and the "
+                "file is left alone."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path relative to the working directory."},
+                    "old_string": {"type": "string", "description": "The exact text to replace; must appear exactly once."},
+                    "new_string": {"type": "string", "description": "What to put in its place."},
+                },
+                "required": ["path", "old_string", "new_string"],
             },
         },
     },
@@ -88,7 +114,12 @@ TOOLS: list[dict] = [
     },
 ]
 
-ACTION_NAMES = ("bash", "write_file", "read_file", "run_tests")
+ACTION_NAMES = ("bash", "write_file", "edit_file", "read_file", "run_tests")
+
+#: Every action that writes into the tree. ONE definition, because the gate, the seal and the
+#: write bookkeeping all have to agree about what counts as a write: a new tool that writes and
+#: is not on this list is a new way around all three.
+WRITE_ACTIONS = ("write_file", "edit_file")
 
 _FENCE = re.compile(r"```([a-zA-Z_]+)([^\n]*)\n(.*?)```", re.DOTALL)
 _JSON_ACTION = re.compile(r"\{\s*\"name\"\s*:\s*\"(\w+)\"\s*,\s*\"(?:arguments|args)\"\s*:\s*(\{.*?\})\s*\}", re.DOTALL)
@@ -193,8 +224,12 @@ def validate(action: Action) -> str:
         )
     if action.name == "bash" and not action.command.strip():
         return "bash needs a non-empty 'command'."
-    if action.name in ("write_file", "read_file") and not action.path.strip():
+    if action.name in ("write_file", "edit_file", "read_file") and not action.path.strip():
         return f"{action.name} needs a 'path'."
     if action.name == "write_file" and "content" not in action.args:
         return "write_file needs 'content' (the complete file)."
+    if action.name == "edit_file" and not str(action.args.get("old_string", "")):
+        return "edit_file needs 'old_string' (the exact text to replace)."
+    if action.name == "edit_file" and "new_string" not in action.args:
+        return "edit_file needs 'new_string'."
     return ""

@@ -127,6 +127,10 @@ class Environment:
                 return self.bash(action.command)
             if action.name == "write_file":
                 return self.write_file(action.path, action.content)
+            if action.name == "edit_file":
+                return self.edit_file(
+                    action.path, action.args.get("old_string", ""), action.args.get("new_string", "")
+                )
             if action.name == "read_file":
                 return self.read_file(action.path, action.args.get("start"), action.args.get("end"))
             if action.name == "run_tests":
@@ -166,6 +170,41 @@ class Environment:
         rel = target.relative_to(self.workdir)
         lines = content.count("\n") + (0 if content.endswith("\n") or not content else 1)
         return Observation(ok=True, exit_code=0, output=f"wrote {rel} ({len(content)} bytes, {lines} lines)",
+                           note="ok")
+
+    def edit_file(self, path: str, old_string: str, new_string: str) -> Observation:
+        """Replace one exact occurrence. Zero or several is a refusal, never a guess.
+
+        A wrong guess about *which* occurrence to change silently corrupts a file, and the model
+        has read_file: it can copy the text. So the only edit this tool performs is the one where
+        the text it was given appears exactly once.
+        """
+        target = self.resolve(path, for_write=True)
+        if target.is_dir():
+            raise ActionError(f"{path!r} is a directory")
+        if not target.is_file():
+            raise ActionError(
+                f"{path!r} does not exist -- edit_file changes a file that is there; "
+                "use write_file to create one"
+            )
+        if not old_string:
+            raise ActionError("edit_file needs a non-empty 'old_string'")
+        text = target.read_text(errors="replace")
+        found = text.count(old_string)
+        if found == 0:
+            raise ActionError(
+                f"old_string does not appear in {path!r} -- read_file it and copy the text "
+                "exactly, whitespace included"
+            )
+        if found > 1:
+            raise ActionError(
+                f"old_string appears {found} times in {path!r} -- include more of the "
+                "surrounding text so the match is unique"
+            )
+        target.write_text(text.replace(old_string, new_string, 1))
+        rel = target.relative_to(self.workdir)
+        return Observation(ok=True, exit_code=0,
+                           output=f"edited {rel} (1 replacement, {len(old_string)} -> {len(new_string)} chars)",
                            note="ok")
 
     def read_file(self, path: str, start=None, end=None) -> Observation:

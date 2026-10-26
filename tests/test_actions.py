@@ -92,6 +92,7 @@ class ValidateTests(unittest.TestCase):
     def test_every_declared_action_is_known(self):
         for name in ACTION_NAMES:
             args = {"command": "ls"} if name == "bash" else {"path": "a", "content": ""} if name == "write_file" else \
+                   {"path": "a", "old_string": "x", "new_string": "y"} if name == "edit_file" else \
                    {"path": "a"} if name == "read_file" else {}
             self.assertEqual(validate(Action(name=name, args=args)), "", name)
 

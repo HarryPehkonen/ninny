@@ -644,6 +644,14 @@ claim written where an observation was available and cheaper. In the arms the fi
 ask"; here it is "measure it before writing it down". It mattered because a reader auditing the commit
 would have found two numbers that no tool in this repo produces.
 
+**And a missing tool looks exactly like a discipline failure from the record's side.** All three
+`dogfood-stamp` arms wrote `ninny/**` through a shell heredoc and never banked a red: the record
+said `bypass_detected` eleven times over, `red_step: None` every time, which reads as three models
+walking around the gate. It was one missing tool. `write_file` takes the complete file, and the file
+was four thousand lines of somebody else's code, so the shell was the only way to change part of it.
+The fix was `edit_file`, not a wall -- and the general rule is that a spike in bypasses is a
+question about the toolset before it is a verdict on the model.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)

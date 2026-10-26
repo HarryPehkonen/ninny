@@ -26,6 +26,7 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ninny.actions import WRITE_ACTIONS
 from ninny.artifacts import is_ignored
 from ninny.env import FAILED_EXIT, NOTHING_RAN_EXIT, PASSED_EXIT
 
@@ -283,7 +284,7 @@ class TDDPolicy:
     # ---------------------------------------------------------------------- gate
     def gate(self, action, state: TDDState, step: int, src_write_suspect: str = "") -> str:
         """Return a refusal message to send back to the model, or '' to allow."""
-        path = action.path if action.name == "write_file" else src_write_suspect
+        path = action.path if action.name in WRITE_ACTIONS else src_write_suspect
         rel = self._rel(path) if path else ""
         if rel and self.task.is_protected(rel):
             state.refusals.append([step, f"protected: {rel}"])
@@ -327,13 +328,13 @@ class TDDPolicy:
         # model's own source edits -- both of which it can still fix. There is nothing left that
         # needs the door, and a sealed file now has no write path at all.
         if self.mode == "split" and state.phase != "test" and state.sealed:
-            if action.name == "write_file" and rel in state.sealed:
+            if action.name in WRITE_ACTIONS and rel in state.sealed:
                 state.refusals.append([step, f"sealed: {rel}"])
                 return self._sealed_message(rel, state.seal_step)
 
         if state.phase != "test":
             return ""
-        if action.name == "write_file":
+        if action.name in WRITE_ACTIONS:
             if self.task.is_src_path(rel) and not state.red_ok:
                 state.refusals.append([step, rel])
                 return self._refusal_message(rel, phase=state.phase)
@@ -449,7 +450,7 @@ class TDDPolicy:
 
     # ------------------------------------------------------------------- observe
     def observe(self, action, observation, state: TDDState, step: int) -> None:
-        if action.name == "write_file":
+        if action.name in WRITE_ACTIONS:
             rel = self._rel(action.path)
             if self.task.is_test_path(rel) and observation.ok:
                 if rel not in state.test_files:
