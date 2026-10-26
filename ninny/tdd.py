@@ -52,6 +52,22 @@ NOT_A_RED = (
     "it. Make it compile and assert something that is wrong, then run it again."
 )
 
+# Round two, said at the moment it becomes true. Every sentence here used to be a paragraph in
+# the preamble, read before the model knew what any of it referred to: the seal is live now, the
+# files it names are the ones that just failed, and the rule about handing back a suite nobody
+# ran applies to the tree in front of it. The text moved to where it is true; nothing was added.
+ROUND_TWO = {
+    "split": (
+        "\n\nThe suite is sealed from here. Writing under the test globs is refused, and the "
+        "files that were red are read-only in the shell too, so what you hand back has to be "
+        "the tests that failed. If a sealed test is wrong and the code cannot satisfy it, say "
+        "so in your final message -- that is the one case where handing back red is right, and "
+        "never because the implementation is inconvenient. You may still ADD test files; the "
+        "record counts them separately. And never hand back a suite you have not run since "
+        "your last change."
+    ),
+}
+
 
 def phase_line(phase: str) -> str:
     """`1/3 RED-FIRST -- write a test that RUNS and fails`."""
@@ -377,6 +393,7 @@ class TDDPolicy:
             state.phase_news = (
                 f"Red banked at step {step} -- the suite ran and failed, which is the "
                 f"observation this gate wanted. Now {phase_line('impl')}."
+                + ROUND_TWO.get(self.mode, "")
             )
         else:
             state.phase_news = f"Phase: {phase_line(phase)}."

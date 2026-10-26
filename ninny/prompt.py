@@ -81,33 +81,15 @@ harness watches the source tree to confirm the refusal was not routed around.
 """,
     "split": """## Testing (TWO ROUNDS in this run)
 
-Round 1 is the tests. Round 2 is the implementation, and it starts the moment a test
-you wrote has been **seen to fail**. Writes into the source tree are refused until then.
+Round 1 is the tests: write a test under {test_globs}, run it with run_tests, and see it
+FAIL. A suite that passes now, or one that never ran (exit 2), is not a red. Writes into
+the source tree are refused until then.
 
-Two phases, in order, and the record says which one you were in when each thing
-happened:
+Round 2 starts the moment that red is banked, and the harness will say so. The suite is
+sealed from then on: what you hand back has to be the tests that failed, and the record
+compares them. A sealed file has no write path left.
 
-{phases}
-
-From the moment that red is banked, the suite is **sealed**: the tests you hand back
-have to be the tests that failed, because the run records whether they are. Writing
-under {test_globs} is refused for the rest of the run, and the files that were red are
-read-only in the shell as well, so nothing you run can rewrite or move them. There is
-no door and no way round it -- a sealed file has no write path left.
-
-So take round 1 seriously: a test that passes by accident seals nothing, and a test you
-will want to change later is a test you got wrong. If a sealed test is wrong and the
-implementation cannot satisfy it, say so in your final message instead of trying to edit
-it. Handing back a red suite is allowed **only for that case** -- a sealed test that is
-wrong -- never because the implementation is inconvenient. You may still ADD new test
-files; the record counts them separately.
-
-And whatever you do: **never hand back a suite you have not run since your last change.**
-A suite nobody ran after the last edit is a claim, not an observation.
-
-{not_a_red}
-
-""",
+{not_a_red}""",
     "reverse": """## Testing
 
 Implement first if you like. Before you may submit, you must write tests for what
