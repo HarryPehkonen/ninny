@@ -139,6 +139,10 @@ class TDDState:
     #: Whether the sealed files were made read-only (the sandbox enforces it) or only
     #: refused by the gate (nothing stops the shell). "Reported" and "enforced" differ.
     sealed_readonly: bool = False
+    #: Which rule applied to the red: a test file the model wrote (benchmark), or any observed
+    #: failure of the tree's own suite (a repository). Copied from the task when the state is
+    #: created so the record can be read without the task, and so `verdict` agrees with it.
+    require_test_file: bool = True
 
     @property
     def own_gate_red(self) -> bool:
@@ -170,8 +174,17 @@ class TDDState:
 
     @property
     def red_ok(self) -> bool:
-        """A failing test has been observed, and a test file exists to fail."""
-        return self.red_step is not None and self.first_test_step is not None and self.red_step >= self.first_test_step
+        """A failing test has been observed, and something exists to fail.
+
+        In a benchmark that something is a test file the model wrote; in a repository it is the
+        suite that was already there, and `require_test_file` says which. Either way exit 2 is
+        not a red -- a run that collected nothing did not fail, it did not happen.
+        """
+        if self.red_step is None:
+            return False
+        if not self.require_test_file:
+            return True
+        return self.first_test_step is not None and self.red_step >= self.first_test_step
 
     @property
     def red_before_code(self) -> bool:
@@ -192,6 +205,9 @@ class TDDState:
             "mode": self.mode,
             "phase": self.phase,
             "verdict": self.verdict(),
+            #: Which rule decided the red. A record can then be read without its task, and a
+            #: repository run is not graded against a benchmark's claim about its suite.
+            "require_test_file": self.require_test_file,
             "test_files": self.test_files,
             "first_test_step": self.first_test_step,
             "first_src_step": self.first_src_step,
@@ -257,7 +273,14 @@ class TDDPolicy:
         self._baseline_src = snapshot(self.workdir, task.src_globs)
 
     def new_state(self) -> TDDState:
-        return TDDState(mode=self.mode, phase="impl" if self.mode in ("off", "reverse") else "test")
+        # Copied from the task rather than read off it later: the state is the record, and a
+        # record that cannot be read without its task is not much of one. getattr keeps the
+        # doubles in the existing tests working.
+        return TDDState(
+            mode=self.mode,
+            phase="impl" if self.mode in ("off", "reverse") else "test",
+            require_test_file=getattr(self.task, "require_test_file", True),
+        )
 
     def _rel(self, path: str) -> str:
         """Where a spelled path lands, relative to the working tree.
@@ -335,11 +358,11 @@ class TDDPolicy:
         if state.phase != "test":
             return ""
         if action.name in WRITE_ACTIONS:
-            if self.task.is_src_path(rel) and not state.red_ok:
+            if self.task.is_src_path(rel) and not self.task.is_test_path(rel) and not state.red_ok:
                 state.refusals.append([step, rel])
                 return self._refusal_message(rel, phase=state.phase)
         if action.name == "bash" and src_write_suspect and not state.red_ok:
-            if rel and self.task.is_src_path(rel):
+            if rel and self.task.is_src_path(rel) and not self.task.is_test_path(rel):
                 state.refusals.append([step, f"bash -> {src_write_suspect}"])
                 return self._refusal_message(src_write_suspect, via_shell=True, phase=state.phase)
         if action.is_submit() and not state.red_ok:

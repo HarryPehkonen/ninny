@@ -29,7 +29,7 @@ from pathlib import Path
 from ninny import UPSTREAM, UPSTREAM_URL, __version__, logs, verdict
 from ninny.agent import Agent
 from ninny.artifacts import write_diff
-from ninny.config import ConfigError, load_task
+from ninny.config import ConfigError, load_task, repo_task
 from ninny.env import Environment
 from ninny.model import PROVIDERS, ModelClient, ModelError
 from ninny.pricing import Pricing
@@ -60,6 +60,56 @@ def resolve_prompt_mode(tdd: str, prompt: str) -> str:
 DEFAULT_TASK_DIR = ".ninny"
 
 
+def default_tdd_for(repo: bool, test_globs: list[str] | None) -> str:
+    """The mode a run gets when `--tdd` was not passed.
+
+    A benchmark task keeps `request`, which is what every measured arm ran under unless it said
+    otherwise. A repository gets `enforce` only once the caller has declared which paths are the
+    tests: the gate refuses a write into the source tree until a red has been seen, and on a
+    repository whose suite is green, every way to make a red is itself a write. That is a
+    deadlock, and a rule that can never be satisfied is indistinguishable from a broken harness.
+    """
+    return "enforce" if (repo and test_globs) else "request"
+
+
+def repo_prompt(args: argparse.Namespace) -> str:
+    """What to work on, from `--prompt` or `--prompt-file`.
+
+    Required and not defaulted: a repository has no SPEC.md to stand in for it.
+    """
+    if args.prompt and args.prompt_file:
+        raise ConfigError("--prompt and --prompt-file both given; pass one of them")
+    if args.prompt_file:
+        path = Path(args.prompt_file).expanduser()
+        if not path.is_file():
+            raise ConfigError(f"no such prompt file: {path}")
+        return path.read_text()
+    if not args.prompt:
+        raise ConfigError(
+            "repo mode needs --prompt TEXT or --prompt-file PATH: the prompt is the task, and "
+            "there is no SPEC.md in a repository to read it from."
+        )
+    return args.prompt
+
+
+def stage_worktree(repo: Path, workdir: Path) -> None:
+    """A working copy of the repository at HEAD.
+
+    A worktree rather than a copy: the run is isolated, `diff.patch` is then the run's own work,
+    and the repository's own gate can run because git resolves through the main repository --
+    which is why `repo_task` binds that path into the sandbox read-only. Measured: without the
+    bind, git inside bwrap reports "not a git repository"; with it, status/diff/log work and
+    add/commit fail cleanly against the read-only bind.
+    """
+    workdir.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "--detach", str(workdir), "HEAD"],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise ConfigError(f"could not stage a worktree of {repo}: {proc.stderr.strip()[:200]}")
+
+
 def _task_path(raw: str | None) -> Path:
     """`--task`, or the convention directory when the flag is omitted.
 
@@ -78,7 +128,15 @@ def _task_path(raw: str | None) -> Path:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    task = load_task(_task_path(args.task))
+    if args.repo and args.task:
+        raise ConfigError("--repo and --task are different doors: pass one of them")
+    args.tdd = args.tdd or default_tdd_for(bool(args.repo), args.test_glob)
+    task = (
+        repo_task(Path(args.repo), repo_prompt(args), args.test_cmd or "",
+                  test_globs=args.test_glob, step_limit=args.steps or 60)
+        if args.repo
+        else load_task(_task_path(args.task))
+    )
     base_url, api_key, wire = resolve_endpoint(args)
     logs.register_secret(api_key)  # the process holding the key writes the log
     pricing = Pricing(base_url, api_key, price_file=args.price_file, fetch=not args.no_price_fetch)
@@ -88,7 +146,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     name = args.name or _default_name(args.model, args.tdd)
     run_dir = archive_if_exists(out_root / name, args.force)
     workdir = run_dir / "tree"
-    shutil.copytree(task.tree_src, workdir, symlinks=True, dirs_exist_ok=False)
+    if args.repo:
+        stage_worktree(task.tree_src, workdir)
+    else:
+        shutil.copytree(task.tree_src, workdir, symlinks=True, dirs_exist_ok=False)
 
     sandbox = build_sandbox(
         args.sandbox,
@@ -177,6 +238,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"  log:        {_log_path()}")
     print()
     print(f"next, BY HAND: ninny check --task {task.root} --tree {workdir}")
+    if args.repo:
+        print(f"next, BY HAND: ninny verdict {run_dir}")
     _record(
         args,
         task=task.name,
@@ -670,14 +733,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="one model, one task")
     run.add_argument("--task", help="task directory (contains task.toml); default ./.ninny")
+    run.add_argument("--repo", help="work on a git repository directly: a worktree at HEAD, no "
+                                    "fixture, no oracle. Needs --prompt (or --prompt-file) and "
+                                    "--test-cmd; see --test-glob for the red-first gate")
+    run.add_argument("--prompt", help="what to do, for --repo: the task text")
+    run.add_argument("--prompt-file", help="what to do, for --repo: a file to read it from")
+    run.add_argument("--test-cmd", help="how the change is exercised, for --repo. Required, and "
+                                       "never guessed: repos differ, and a wrong guess is worse")
+    run.add_argument("--test-glob", action="append",
+                     help="a path pattern that is a test file, for --repo (repeatable). Declaring "
+                          "one turns on the red-first gate; without it the run records the order "
+                          "and enforces the handback instead")
     run.add_argument("--model", required=True, help="model id as the endpoint spells it")
     run.add_argument("--provider", help=f"one of {', '.join(sorted(PROVIDERS))}")
     run.add_argument("--base-url", help="any OpenAI-compatible endpoint; overrides --provider")
     run.add_argument("--api-key", help="defaults to the provider's environment variable")
     run.add_argument("--wire", choices=["chat", "completions"], help="protocol shape")
-    run.add_argument("--tdd", choices=list(MODES), default="request",
+    run.add_argument("--tdd", choices=list(MODES), default=None,
                      help="what the gate does. request: measure the order, refuse nothing "
-                          "(default) | enforce: also refuse src writes until a RED is seen "
+                          "(default for a task) | enforce: also refuse src writes until a RED is "
+                          "seen (default for --repo once --test-glob is given)"
                           "| reverse: code first, tests required before submit | off")
     run.add_argument("--sandbox", choices=["none", "bwrap"], default="none")
     run.add_argument("--bwrap-path", help="path to a bwrap binary, if it is not on PATH")

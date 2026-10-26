@@ -11,6 +11,11 @@ which five to AND together, and `ninny run` printed prose. The exit code is the 
 
 Three rules, each with a test on it.
 
+**The frozen clause is a benchmark's.** A repository run satisfies it or not and says so in
+`suite_frozen_since_red`; it is not refused for extending its own suite after the red, because
+that is what developing in a repository is. Benchmarks -- which required a test file of the
+model's own -- are held to it, as are all records written before the field existed.
+
 A **missing field is 2**, with `record incomplete: <field>`, never a silent pass -- a verifier that
 passes on absent evidence is the failure this repo has a lesson about, and an orchestrator that
 applies a patch because a key it never read was absent is worse off than one that read nothing.
@@ -56,6 +61,7 @@ def verdict_of(result: dict) -> tuple[int, dict]:
         "suite_frozen_since_red": tdd.get("suite_frozen_since_red"),
         "bypass_detected": tdd.get("bypass_detected"),
         "harness_runs": tdd.get("harness_runs"),
+        "require_test_file": tdd.get("require_test_file", True),
         "steps": result.get("steps"),
         "cost_usd": result.get("cost_usd"),
         "reasons": [],
@@ -75,7 +81,12 @@ def verdict_of(result: dict) -> tuple[int, dict]:
     reasons = []
     if not tdd.get("red_before_code"):
         reasons.append(f"no red before the first source write (order: {tdd.get('verdict')})")
-    if tdd.get("suite_frozen_since_red") is not True:
+    # The seal's claim belongs to the runs that make it. A benchmark required a test file of its
+    # own, so the suite handed back has to be the suite that went red; a repository's suite is
+    # the model's to extend -- which is exactly why the read-only bind is split-only -- so it
+    # reports `suite_frozen_since_red` without being held to it. Defaulting to True reads every
+    # record written before the field existed the way it was read then.
+    if tdd.get("require_test_file", True) and tdd.get("suite_frozen_since_red") is not True:
         reasons.append("the suite handed back is not the suite that went red")
     if not tdd.get("green_after_last_write"):
         reasons.append("no green observed after the last source write")

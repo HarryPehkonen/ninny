@@ -53,6 +53,14 @@ class Task:
     timeout_s: int
     test_timeout_s: int
     protected_globs: list[str] = field(default_factory=list)
+    #: Whether the RED has to come from a test file the model wrote.
+    #:
+    #: True for a benchmark: the suite is the deliverable, and "a test exists to fail" is what
+    #: makes the ordering claim mean something rather than a broken command happening to exit 1.
+    #: False for a real repository, where the suite is already there and what is graded is that a
+    #: red was SEEN (exit 1 -- exit 2 is "nothing ran" and is never banked) before the source
+    #: changed, and that the tree was green after the last write.
+    require_test_file: bool = True
     # Extra paths this task's toolchain needs, exposed read-only at the same location.
     # A task whose interpreter or compiler lives outside /usr cannot be scored at all,
     # and the failure looks like the model's. Declaring it here means the sandbox plan
@@ -78,6 +86,69 @@ class Task:
     def is_protected(self, rel: str) -> bool:
         """Paths the agent may not write: the instrument, not the work."""
         return _matches(rel, self.protected_globs)
+
+
+def repo_task(
+    repo: str | Path,
+    spec: str,
+    test_cmd: str,
+    *,
+    test_globs: list[str] | None = None,
+    step_limit: int = 60,
+    timeout_s: int = 120,
+    test_timeout_s: int = 600,
+) -> Task:
+    """A `Task` for a real repository: no fixture, no oracle, and no seal.
+
+    The second constructor. `ninny run --repo` is the same run loop -- the same gate, the same
+    exit-code contract, the same record, the same `ninny verdict` -- pointed at a working copy
+    instead of a benchmark fixture. Four fields carry the difference:
+
+    - `oracle_dir = None`: there is no external corpus to stage or hide. The repository's own
+      gate is the acceptance evidence, and what gets graded is the handback, not a score.
+    - `test_globs` comes from `--test-glob` and is empty by default. Which files are tests is a
+      property of the repository; a glob we guessed would classify the wrong files with
+      confidence, so the record says `no-tests` until the caller says otherwise.
+    - `src_globs = ["**"]`: every path is the work. A write is only refused while a red has not
+      been seen, and `is_test_path` is consulted first, so a declared test path stays writable
+      before the red -- in a repository the tests are the model's to extend.
+    - `require_test_file = False`: the suite already exists, so a red only has to be seen.
+
+    `sandbox_binds` carries the repository itself. A git worktree's `.git` is a file pointing
+    into the main repository, so git inside bwrap cannot resolve HEAD without it -- measured, not
+    assumed. The bind is read-only by contract, which is enough for `status`, `diff` and `log`
+    and refuses `add`/`commit` with a clean error; a repository whose gate needs git to write
+    needs a read-write bind, and that is not built until a measured gate asks for it.
+    """
+    root = Path(repo).expanduser().resolve()
+    if not root.is_dir():
+        raise ConfigError(f"{root} is not a directory")
+    if not (root / ".git").exists():
+        raise ConfigError(f"{root} is not a git repository (--repo stages a worktree of it)")
+    if not test_cmd:
+        raise ConfigError(
+            "repo mode needs --test-cmd: the command that exercises the change. This is not "
+            "guessed -- repositories on this machine split between scripts/gate.sh and "
+            "tools/ci.sh, and a guess that is wrong half the time is worse than a flag."
+        )
+    return Task(
+        root=root,
+        name=root.name,
+        spec=spec,
+        tree_src=root,
+        oracle_dir=None,
+        test_cmd=test_cmd,
+        oracle_cmd=None,
+        test_globs=list(test_globs or []),
+        src_globs=["**"],
+        preflight=[],
+        step_limit=step_limit,
+        timeout_s=timeout_s,
+        test_timeout_s=test_timeout_s,
+        protected_globs=[],
+        sandbox_binds=[str(root)],
+        require_test_file=False,
+    )
 
 
 def load_task(path: str | Path) -> Task:
