@@ -152,6 +152,10 @@ class Action:
             return f"bash: {self.command.splitlines()[0][:120] if self.command else '(empty)'}"
         if self.name == "write_file":
             return f"write_file: {self.path} ({len(self.content)} bytes)"
+        if self.name == "edit_file":
+            old = str(self.args.get("old_string", ""))
+            new = str(self.args.get("new_string", ""))
+            return f"edit_file: {self.path} ({len(old)} -> {len(new)} chars)"
         if self.name == "read_file":
             return f"read_file: {self.path}"
         return f"{self.name}: {json.dumps(self.args)[:120]}"
@@ -172,7 +176,13 @@ def actions_from_tool_calls(calls) -> list[Action]:
 
 
 def actions_from_text(text: str) -> list[Action]:
-    """Recover actions from a reply that used fenced blocks instead of tool calls."""
+    """Recover actions from a reply that used fenced blocks instead of tool calls.
+
+    Four actions here, not five, and that is a property of the wire rather than an oversight: a
+    fence carries one body, so it can express `bash`, `run_tests`, a whole-file `write_file` or a
+    `read_file` path, but it cannot carry the three arguments `edit_file` needs. On this wire the
+    model edits by rewriting the file. The tool-call wire offers all five.
+    """
     actions: list[Action] = []
     for match in _FENCE.finditer(text):
         lang = match.group(1).lower()

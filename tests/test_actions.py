@@ -96,6 +96,28 @@ class ValidateTests(unittest.TestCase):
                    {"path": "a"} if name == "read_file" else {}
             self.assertEqual(validate(Action(name=name, args=args)), "", name)
 
+    def test_every_action_describes_itself_in_one_line(self):
+        """A step log line, not a JSON dump. `edit_file` fell through to raw args once, which
+        put every old_string and new_string into the trajectory and the terminal.
+
+        Real arguments per action, so a fall-through is visible: `run_tests` takes none, and
+        `run_tests: {}` is the harmless shape of that rather than a JSON payload.
+        """
+        real_args = {
+            "bash": {"command": "ls"},
+            "write_file": {"path": "src/a.py", "content": "x = 1\n"},
+            "edit_file": {"path": "src/a.py", "old_string": "x = 1", "new_string": "x = 2"},
+            "read_file": {"path": "src/a.py"},
+            "run_tests": {},
+        }
+        self.assertEqual(sorted(real_args), sorted(ACTION_NAMES),
+                         "the guard must cover every action that exists")
+        for name, args in real_args.items():
+            line = Action(name=name, args=args).describe()
+            self.assertTrue(line.startswith(name + ":"), line)
+            self.assertNotIn('{"', line, f"{name} describe() dumped raw JSON: {line}")
+            self.assertLess(len(line), 120, line)
+
     def test_unknown_action_names_are_rejected(self):
         message = validate(Action(name="deploy_to_production", args={}))
         self.assertIn("unknown action", message)

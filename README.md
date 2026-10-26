@@ -369,6 +369,7 @@ this model does when nobody stops it*.
 |---|---|
 | `bash` | run a shell command in the working tree |
 | `write_file` | write a file, creating parent directories |
+| `edit_file` | replace one exact occurrence of text in an existing file |
 | `read_file` | read a file, optionally a line range |
 | `run_tests` | run the task's own test command and report the exit status |
 
