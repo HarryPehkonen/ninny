@@ -1,7 +1,25 @@
 # The delegate whose handback is evidence — plan
 
-**Repo:** `~/hermes-workspace/ninny` at `6620ea6` (main == origin/main, clean).
-**Written:** 2026-10-26 14:11. **Status: PROPOSED — nothing below is started until Harri says go.**
+**Repo:** `~/hermes-workspace/ninny` at `55df2ed` (main == origin/main, clean).
+**Written:** 2026-10-26 14:11. **Executed:** 2026-10-26, same day.
+**Status: EXECUTED through step 2; step 3 is in flight.** Commits: `9a5fb49` (this plan),
+`f8c2670` (0 — the seal's mount, the manual), `0162bfc` (`ninny verdict`), `a205935`
+(`run --repo`), `81ea9c0` (the README opening), `66fce59` (**Ninny's own patch, applied**),
+`194b7b1` (the three defects the first repository run found), `55df2ed` (LESSONS).
+
+**Two decisions in this plan that did not survive contact, both recorded in their commits:**
+- **`--repo` defaults to `request`, not `enforce`.** `enforce` refuses a source write until a red
+  has been seen; on a repository whose suite is *green*, every way to make a red is itself a write.
+  A deadlock is not strictness. `enforce` is one flag away (`--test-glob`).
+- **The patch is `git diff` in the worktree against its staged commit**, not against the live tree:
+  the live tree moves (my own commit landing mid-run read as the delegate deleting it) and is full
+  of gitignored residue. Measured on the first run: 30.8 MB, 2,224 file headers, 482,462 removed
+  lines, for a change of ten.
+
+**What step 3 has produced so far:** `66fce59` — a 17-step, $0.0045 run fixed
+`build_sandbox(binds=None)`'s `TypeError` in `ninny/sandbox.py` and added its own test; applied by
+hand with 366 tests green. Its verdict was **exit 1, unproven** — good patch, no evidence, because
+it never ran the suite. That distinction is the product.
 
 **Goal:** make this sentence true for a developer who is not us: *a generic agent delegates a
 small, specified change to Ninny with one command, and gets back a diff plus a record it can
@@ -25,11 +43,17 @@ accept or reject mechanically — without reading prose and without trusting the
 |---|---|---|---|---|---|
 | cap 30, four actions | 3 | 2 | **0** | 11 total | n/a |
 | cap 60, four actions | 3 | 3 | **0** | yes, all 3 | 3 |
-| cap 60, **+ `edit_file`** (`ab-editfile` + `ab-editfile2`, 4 of 6 landed) | **7** | 7 | **7** | **0** | 7 |
+| cap 60, **+ `edit_file`** (`ab-editfile` + `ab-editfile2`) | **9** | 9 | **9** | **0** | 9 |
+| cap 60, + `edit_file`, **seal unbound in `enforce`** (`ab-unsealed`) | 3 | 3 | **3** | **0** | 3 |
 
-Red lands one step before the first source write in every one of the seven. Same model, same
+Red lands one step before the first source write in every one of the twelve. Same model, same
 task, same mode; the only change is the tool. This is the first outcome-adjacent number that has
 moved in the whole campaign. It is also **one task**: the corpus-wide claim is still open.
+
+The unsealed row is the confirmation run this plan asked for, and it held the pre-registered
+prediction: bypasses stayed 0, red-first stayed 3/3, and `suite_frozen_since_red` stayed true in
+all three — the drop I allowed for did not happen. It cost **42.0** mean steps against the sealed
+batch's 32.3, so the seal was not only a theorem about the artifact; it was also a shortcut.
 
 What is already pushed since the review: `d5e1b33` (edit_file + gate), `487670f` (README five
 actions), `6620ea6` (describe(), README table, text-wire note). What is **written and red, not
