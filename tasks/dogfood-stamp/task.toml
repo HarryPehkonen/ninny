@@ -31,7 +31,9 @@ src_globs = ["ninny/**"]
 protected_globs = ["tools/**"]
 
 preflight = ["python3 -V"]
-step_limit = 30
+# 30 was too short and the record says so: three arms, all StepLimit at exactly 30, and the two
+# that got the stamp right had it green by step 27-28 -- the budget bound them, not the task.
+step_limit = 60
 timeout_s = 120
 test_timeout_s = 180
 
