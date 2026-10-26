@@ -14,7 +14,7 @@ different harnesses, at every price point, **not one run wrote a test and watche
 before writing the code it was testing.** Every harness asks for test-first in prose. None
 of them could tell you whether it happened.
 
-Ninny is small on purpose: four actions, one loop, no dependencies, and a record you can
+Ninny is small on purpose: five actions, one loop, no dependencies, and a record you can
 check by hand.
 
 ---
@@ -41,13 +41,14 @@ described below. Where this project is wrong, the fault is Ninny's, not upstream
 
 ## What it is not
 
-No MCP. No multi-agent. No plugin system. No daemon, no server, no browser. Four actions,
+No MCP. No multi-agent. No plugin system. No daemon, no server, no browser. Five actions,
 one loop, and a record. The additions are allowed only when a *measured* failure justifies
 one — there is a note in the source for every one of them.
 
 It is also not a worker. Ninny is an **instrument**: it measures what a model-and-task
 does. The shape it can handle is one module, well specified, decided by the repo's own gate
-or an oracle, on a disposable tree. Four actions cannot do a multi-file refactor, and
+or an oracle, on a disposable tree. Five actions, one of them a surgical edit; whether that is
+enough for a multi-file refactor is an open measurement, and
 pretending otherwise is how a harness grows a plugin registry.
 
 ## Install
@@ -362,7 +363,7 @@ test-first rule, so it is not conditional on the test-first mode. `--allow-red-s
 turns it off — the switch between *get the best code out of this model* and *measure what
 this model does when nobody stops it*.
 
-## The four actions
+## The five actions
 
 | action | what it does |
 |---|---|
@@ -667,7 +668,10 @@ Written down because a harness that hides its own seams is lying to you.
   task took 19 seconds and every one of them caught at least five of the six seeded defects —
   so on that task an automatic check would print "all clear" every time. It is deferred until
   a task's own tests *are* the deliverable.
-- **Four actions cannot do a multi-file refactor.** Deliberate.
+- **Five actions, with `edit_file` for changing part of a file.** The claim that stood here -- that
+  four actions cannot do a multi-file refactor -- was never measured. Three `dogfood-stamp` arms
+  are the first thing that measures it: all three reached for a shell heredoc to edit a
+  four-thousand-line file, because the only write tool took the complete file.
 - **`bwrap` is Linux-only.** Deliberate, and always optional.
 
 ## Testing, and the gate
