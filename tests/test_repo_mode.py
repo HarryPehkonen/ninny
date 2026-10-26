@@ -23,7 +23,8 @@ from dataclasses import fields, replace
 from pathlib import Path
 
 from ninny.actions import Action
-from ninny.cli import build_parser, cmd_run, default_tdd_for, stage_worktree
+from ninny.cli import (build_parser, cmd_run, default_tdd_for, stage_worktree,
+                       write_worktree_diff)
 from ninny.config import ConfigError, Task, repo_task
 from ninny.tdd import TDDPolicy
 from ninny.verdict import EXIT_ARTIFACT, EXIT_UNPROVEN, verdict_of
@@ -274,12 +275,115 @@ class HowARepositoryRecordIsGraded(unittest.TestCase):
         self.assertEqual(code, EXIT_UNPROVEN)
         self.assertIn("not the suite that went red", "; ".join(line["reasons"]))
 
-    def test_every_reason_still_shows_up_together(self):
+    def test_every_applicable_reason_shows_up_together(self):
+        """Two here, not three: a repository record is not refused for its order, so the red
+        clause does not fire. The other two do, and both are named."""
         code, line = verdict_of(self.record(require_test_file=False, red_before_code=False,
                                             green_after_last_write=False,
                                             bypass_detected=[[7, "src/a.py"]]))
         self.assertEqual(code, EXIT_UNPROVEN)
+        self.assertEqual(len(line["reasons"]), 2)
+        self.assertIn("no green observed", "; ".join(line["reasons"]))
+        self.assertIn("went round the tools", "; ".join(line["reasons"]))
+
+    def test_a_benchmark_gets_all_three(self):
+        code, line = verdict_of(self.record(require_test_file=True, red_before_code=False,
+                                            green_after_last_write=False,
+                                            bypass_detected=[[7, "src/a.py"]]))
+        self.assertEqual(code, EXIT_UNPROVEN)
         self.assertEqual(len(line["reasons"]), 3)
+
+
+class ThePatchIsTheDelegatesWork(unittest.TestCase):
+    """The defect the first repository run found, in its own numbers: 30.8 MB, 2,224 file headers,
+    482,462 removed lines, for a change of ten lines. `write_diff` compared the live tree against
+    the worktree, so anything the live tree had and a fresh checkout did not -- my own README
+    commit landing mid-run, every gitignored file on disk -- read as the delegate deleting it."""
+
+    def test_it_names_the_edits_and_nothing_else(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = a_repo(Path(tmp) / "myapp")
+            workdir = Path(tmp) / "run" / "tree"
+            base = stage_worktree(repo, workdir)
+
+            # A commit lands in the live repo while the run is going: not the delegate's work.
+            (repo / "moved_on.py").write_text("committed elsewhere\n")
+            subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(repo), "-c", "user.email=p@x", "-c", "user.name=p",
+                            "commit", "-q", "-m", "mid-run"], check=True, capture_output=True)
+            # And the live tree has gitignored residue a fresh worktree does not.
+            (repo / "residue.bin").write_text("x" * 5000)
+            (repo / ".gitignore").write_text("residue.bin\n")
+
+            (workdir / "app.py").write_text("print('changed')\n")   # an edit
+            (workdir / "tests" / "test_new.py").write_text("def test_new():\n    assert True\n")
+
+            patch_path = Path(tmp) / "diff.patch"
+            write_worktree_diff(workdir, base, patch_path)
+            patch = patch_path.read_text()
+
+            self.assertIn("app.py", patch)                 # the edit
+            self.assertIn("test_new.py", patch)            # the new file, staged first
+            self.assertNotIn("moved_on.py", patch)         # the live tree's commit, not its work
+            self.assertNotIn("residue.bin", patch)         # gitignored residue
+            self.assertLess(len(patch), 4000, "a ten-line change is not a 30 MB patch")
+
+    def test_the_stat_line_describes_the_same_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = a_repo(Path(tmp) / "myapp")
+            workdir = Path(tmp) / "run" / "tree"
+            base = stage_worktree(repo, workdir)
+            (workdir / "app.py").write_text("print('changed')\n")
+            stat = write_worktree_diff(workdir, base, Path(tmp) / "d.patch")
+            self.assertIn("1 file changed", stat)
+            self.assertIn("1 insertion(+)", stat)
+
+
+class HowARepositoryRecordIsGradedOnTheHandback(unittest.TestCase):
+    """A repository run keeps its order in the record; it is not refused for it."""
+
+    def record(self, **overrides):
+        tdd = {
+            "verdict": "red-after-code",
+            "test_files": [],
+            "first_test_step": None,
+            "first_src_step": 9,
+            "red_step": 12,
+            "red_exit": 1,
+            "red_before_code": False,
+            "green_after_last_write": True,
+            "suite_frozen_since_red": None,
+            "bypass_detected": [],
+            "harness_runs": [[13, 0]],
+            "require_test_file": False,
+        }
+        tdd.update(overrides)
+        return {"exit_status": "Submitted", "steps": 14, "cost_usd": 0.004, "tdd": tdd}
+
+    def test_a_repository_run_that_never_saw_a_red_can_still_be_the_artifact(self):
+        code, line = verdict_of(self.record())
+        self.assertEqual(code, EXIT_ARTIFACT)
+        self.assertEqual(line["verdict"], "artifact")
+        self.assertEqual(line["order"], "red-after-code")   # reported, not a refusal
+        self.assertEqual(line["reasons"], [])
+
+    def test_but_not_when_nothing_observed_the_tree_being_handed_back(self):
+        """The first repository run, exactly: submitted, never ran the suite."""
+        code, line = verdict_of(self.record(green_after_last_write=None, harness_runs=[],
+                                            red_step=None, red_before_code=False))
+        self.assertEqual(code, EXIT_UNPROVEN)
+        self.assertEqual(len(line["reasons"]), 1)
+        self.assertIn("no green observed after the last source write", line["reasons"][0])
+
+    def test_a_benchmark_is_still_held_to_its_order(self):
+        code, line = verdict_of(self.record(require_test_file=True))
+        self.assertEqual(code, EXIT_UNPROVEN)
+        self.assertIn("no red before the first source write", "; ".join(line["reasons"]))
+
+    def test_a_bypass_is_still_a_refusal_for_a_repository(self):
+        code, line = verdict_of(self.record(bypass_detected=[[11, "app.py"]]))
+        self.assertEqual(code, EXIT_UNPROVEN)
+        self.assertIn("went round the tools", "; ".join(line["reasons"]))
 
 
 if __name__ == "__main__":

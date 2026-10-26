@@ -92,7 +92,7 @@ def repo_prompt(args: argparse.Namespace) -> str:
     return args.prompt
 
 
-def stage_worktree(repo: Path, workdir: Path) -> None:
+def stage_worktree(repo: Path, workdir: Path) -> str:
     """A working copy of the repository at HEAD.
 
     A worktree rather than a copy: the run is isolated, `diff.patch` is then the run's own work,
@@ -108,6 +108,39 @@ def stage_worktree(repo: Path, workdir: Path) -> None:
     )
     if proc.returncode != 0:
         raise ConfigError(f"could not stage a worktree of {repo}: {proc.stderr.strip()[:200]}")
+    # Return the commit it was staged at: that is the only correct basis for the run's patch,
+    # because the live tree moves while a run is going and this one does not.
+    return subprocess.run(["git", "-C", str(workdir), "rev-parse", "HEAD"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def write_worktree_diff(worktree: Path, base: str, out_path: Path) -> str:
+    """The run's own work: `git diff` in the worktree against the commit it was staged at.
+
+    Not a comparison against the live tree. A worktree is pinned to a commit that does not move
+    while a run is going, and the live tree does move: a commit landing mid-run reads as the
+    delegate having deleted it, and every gitignored file present on disk but absent from a fresh
+    checkout reads as another deletion. Measured on the first repository run -- 30.8 MB, 2,224
+    file headers, 482,462 removed lines -- for a change of ten lines.
+
+    Staged first, because `git diff` alone misses a file the delegate created, which is usually
+    the point: a new test file. `git add -A` respects .gitignore, so build residue stays out. The
+    index it writes belongs to a disposable worktree.
+    """
+    staged = subprocess.run(["git", "-C", str(worktree), "add", "-A"],
+                            capture_output=True, text=True)
+    if staged.returncode != 0:
+        raise ConfigError(f"could not stage the worktree: {staged.stderr.strip()[:200]}")
+    diff = subprocess.run(["git", "-C", str(worktree), "diff", "--cached", "--binary", base],
+                          capture_output=True, text=True)
+    if diff.returncode != 0:
+        raise ConfigError(f"could not diff the worktree: {diff.stderr.strip()[:200]}")
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(diff.stdout or "(no changes)\n")
+    stat = subprocess.run(["git", "-C", str(worktree), "diff", "--cached", "--shortstat", base],
+                          capture_output=True, text=True).stdout.strip()
+    return stat or "no changes"
 
 
 def _task_path(raw: str | None) -> Path:
@@ -146,8 +179,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     name = args.name or _default_name(args.model, args.tdd)
     run_dir = archive_if_exists(out_root / name, args.force)
     workdir = run_dir / "tree"
+    base_sha = ""
     if args.repo:
-        stage_worktree(task.tree_src, workdir)
+        base_sha = stage_worktree(task.tree_src, workdir)
     else:
         shutil.copytree(task.tree_src, workdir, symlinks=True, dirs_exist_ok=False)
 
@@ -227,7 +261,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         log=(lambda _line: None) if args.quiet else print,
     )
     result = agent.run()
-    diff_stat = write_diff(task.tree_src, workdir, run_dir / "diff.patch")
+    diff_stat = (
+        write_worktree_diff(workdir, base_sha, run_dir / "diff.patch")
+        if args.repo
+        else write_diff(task.tree_src, workdir, run_dir / "diff.patch")
+    )
 
     print()
     print(f"=== {result.exit_status} ===")

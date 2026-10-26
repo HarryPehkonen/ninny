@@ -192,13 +192,17 @@ class Agent:
                 # observation, and three live arms handed back exactly that while the record
                 # could not see it. The harness takes the observation itself, marks it as its
                 # own, and lets the ordinary rules judge what it found.
-                # Only where there is a suite to observe. A run that never wrote a test is
-                # already reported as `no-tests`, and running its empty suite would produce a
-                # "your tests are failing" the model never earned.
+                # Only where there is a suite to observe. In a benchmark that means a test file
+                # the model wrote: a run with none is already reported as `no-tests`, and running
+                # its empty suite would raise a "your tests are failing" the model never earned.
+                # A repository's suite already exists, so `require_test_file = False` says the
+                # test_files list is not the question. Without this clause the guard never fired
+                # in repo mode at all: the first repository run submitted having never run the
+                # suite, and the record could say nothing about whether the change worked.
                 if (
                     action.is_submit()
                     and self.policy.require_green
-                    and state.test_files
+                    and (state.test_files or not state.require_test_file)
                     and state.suite_stale
                 ):
                     fresh = self.env.execute(Action(name="run_tests", args={}))

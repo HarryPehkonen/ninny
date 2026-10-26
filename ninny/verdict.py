@@ -11,10 +11,13 @@ which five to AND together, and `ninny run` printed prose. The exit code is the 
 
 Three rules, each with a test on it.
 
-**The frozen clause is a benchmark's.** A repository run satisfies it or not and says so in
-`suite_frozen_since_red`; it is not refused for extending its own suite after the red, because
-that is what developing in a repository is. Benchmarks -- which required a test file of the
-model's own -- are held to it, as are all records written before the field existed.
+**Which clauses apply is a property of the run, not of the reader.** A benchmark required a test
+file of the model's own, so it is held to both its order (a red before the first source write) and
+its artifact (the suite handed back is the suite that went red). A repository run is held to the
+handback only: green observed after the last source write, and no write that went round the tools.
+It still reports its order and whether the suite was frozen; it is just not refused for developing
+the way development works. Every record written before the field existed defaults to the
+benchmark's reading, which is how it was read when it was written.
 
 A **missing field is 2**, with `record incomplete: <field>`, never a silent pass -- a verifier that
 passes on absent evidence is the failure this repo has a lesson about, and an orchestrator that
@@ -79,7 +82,11 @@ def verdict_of(result: dict) -> tuple[int, dict]:
                        [f"did not submit: {result.get('exit_status')}"])
 
     reasons = []
-    if not tdd.get("red_before_code"):
+    # The order clause is a benchmark's claim too. A benchmark's deliverable IS the test-first
+    # suite, so "a red was seen before the source changed" is what it grades. A repository run is
+    # graded on the handback -- a green observed after the last source write, and no write that
+    # went round the tools -- and reports its order in `order` for anyone who wants it.
+    if tdd.get("require_test_file", True) and not tdd.get("red_before_code"):
         reasons.append(f"no red before the first source write (order: {tdd.get('verdict')})")
     # The seal's claim belongs to the runs that make it. A benchmark required a test file of its
     # own, so the suite handed back has to be the suite that went red; a repository's suite is
