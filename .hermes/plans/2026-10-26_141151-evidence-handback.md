@@ -16,10 +16,30 @@
   of gitignored residue. Measured on the first run: 30.8 MB, 2,224 file headers, 482,462 removed
   lines, for a change of ten.
 
-**What step 3 has produced so far:** `66fce59` — a 17-step, $0.0045 run fixed
-`build_sandbox(binds=None)`'s `TypeError` in `ninny/sandbox.py` and added its own test; applied by
-hand with 366 tests green. Its verdict was **exit 1, unproven** — good patch, no evidence, because
-it never ran the suite. That distinction is the product.
+**What step 3 has produced:** two patches, both applied by hand and pushed.
+- `66fce59` — a 17-step, $0.0045 run fixed `build_sandbox(binds=None)`'s `TypeError` in
+  `ninny/sandbox.py` and wrote `tests/test_sandbox_null_binds.py`. 366 tests green.
+- `ae92730` — a 30-step, $0.0173 run fixed `_refusal_message` so it stops dropping an empty glob
+  list into the instruction, and wrote `tests/test_refusal_wording.py`, which drives the real
+  `TDDPolicy` gate rather than a mock. 376 tests green. That run hit its step limit and never
+  submitted — verdict exit 2, "did not submit" — and its patch was applied anyway, on its merits.
+- The first of those runs also produced the evidence that the patch basis was wrong: 30.8 MB,
+  2,224 file headers, 482,462 removed lines, for a change of ten. The second handed back
+  **5,092 bytes for two files**, including a file it created — which appears in the diff at all
+  only because the worktree is staged before it is diffed.
+
+**Open call, with the measurement already taken.** A repository run's suite is invisible to the
+record when the delegate runs it the way a person would: `bash scripts/run-tests.sh`, or
+`python3 -m unittest …`. Both repository runs did exactly that. All nine benchmark arms used the
+`run_tests` tool instead (`tool_runs` 1–5 each). So for a repository run, `test_runs`,
+`test_files` and `red_step` come back empty **not because nothing happened** — run 1 ran the suite
+twice after its last source write, and run 2 wrote a test file and ran it — but because nothing was
+*declared*: "is this a test file?" is answered by `test_globs`, which a repository run does not have
+unless `--test-glob` is passed. The single change that closes it: count a `bash` command invoking
+the declared `test_cmd` as a test observation, and a write into a path the suite collects as a test
+file. The gate already inspects bash commands for writes, so the mechanism exists. Concretely: run
+1's verdict would move from *unproven* to **artifact** — it did observe a green after its last
+source write, and the record could not see it happen.
 
 **Goal:** make this sentence true for a developer who is not us: *a generic agent delegates a
 small, specified change to Ninny with one command, and gets back a diff plus a record it can
