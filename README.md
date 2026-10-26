@@ -17,6 +17,36 @@ of them could tell you whether it happened.
 Ninny is small on purpose: five actions, one loop, no dependencies, and a record you can
 check by hand.
 
+Most delegates hand back a diff and a sentence — *implemented, tests pass*. Ninny hands back a
+record, and a verdict a caller can gate on. This is a real run against this project's own test
+suite, asked to add one small feature, by a model that costs cents per run:
+
+```console
+$ ninny verdict runs/dogfood-stamp/ab-dogfood60-1
+{"bypass_detected": [[20, "ninny/artifacts.py"], [24, "ninny/agent.py"], [43, "ninny/agent.py"],
+ [43, "ninny/artifacts.py"]], "exit": 1, "exit_status": "Submitted", "first_src_step": 20,
+ "green_after_last_write": true, "order": "red-after-code", "red_step": 44, "steps": 49,
+ "suite_frozen_since_red": true, "verdict": "unproven", "reasons": ["no red before the first
+ source write (order: red-after-code)", "4 write(s) went round the tools: ..."]}
+```
+
+It submitted, its patch is real, and the tree it handed back was green — every harness we measured
+would call that a pass. The verdict is **exit 1, unproven**: the source was edited at step 20 and
+the first failing test appeared at step 44, so there is no evidence the test came before the code,
+and four writes went round the tools instead of through them. Run the same command on a run whose
+tests went red first and it prints this instead:
+
+```console
+$ ninny verdict runs/dogfood-stamp/ab-editfile2-1
+{"bypass_detected": [], "exit": 0, "exit_status": "Submitted", "first_src_step": 15,
+ "green_after_last_write": true, "order": "red-first", "red_step": 14, "steps": 28,
+ "suite_frozen_since_red": true, "verdict": "artifact", "reasons": []}
+```
+
+**0** artifact present · **1** handed back, unproven, with `reasons` naming each way · **2**
+nothing was handed back at all. Prose is not part of that contract. The idea in one line: *a
+delegate whose handback is evidence.*
+
 ---
 
 ## Built on mini-swe-agent
