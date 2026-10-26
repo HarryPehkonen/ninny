@@ -444,11 +444,28 @@ class TDDPolicy:
         self, rel: str, via_shell: bool = False, on_submit: bool = False, phase: str = "test"
     ) -> str:
         how = "A shell command tried to write" if via_shell else "That write"
+        # The first step has to fit the run. A benchmark declares its test globs, so naming
+        # them says exactly which files count. A repository without `--test-glob` declares
+        # none, and `', '.join([])` renders as an empty gap -- "write a test under  with
+        # write_file" -- an instruction with the destination missing, which is how a model
+        # ends up guessing. With no globs, say the true thing instead: the suite already
+        # there is what has to fail first.
+        if self.task.test_globs:
+            first_step = (
+                f"1. write a test under {', '.join(self.task.test_globs)} with write_file\n"
+            )
+        else:
+            first_step = (
+                "1. the repository's own suite has to fail first: write a test file (or make "
+                "an existing one fail) with write_file, or run the suite as it stands with "
+                "run_tests if it is already red\n"
+            )
         return (
             f"Refused (test-first is enforced in this run). {how} to {rel} before any test "
             "has been seen to fail.\n"
             f"You are in {phase_line(phase)}.\n"
-            f"1. write a test under {', '.join(self.task.test_globs)} with write_file\n"
+            + first_step
+            +
             "2. run it with run_tests and look at the failure it reports\n"
             "3. then write the implementation\n"
             + NOT_A_RED
