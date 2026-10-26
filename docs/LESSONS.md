@@ -652,6 +652,16 @@ was four thousand lines of somebody else's code, so the shell was the only way t
 The fix was `edit_file`, not a wall -- and the general rule is that a spike in bypasses is a
 question about the toolset before it is a verdict on the model.
 
+**And two enforcement layers over one path will disagree.** The read-only bind that seals the
+suite was applied in *every* mode while the gate that refuses a write into a sealed test fired in
+`split` alone (tdd.py's sealed branch is mode-guarded). So in `enforce` bash was physically blocked
+-- the bind is a mount, and bash runs inside it -- while `write_file` and `edit_file` walked
+straight past it, because the file tools run in the harness's own process and not in the sandbox.
+Neither layer was wrong on its own; together they meant the record and the physics told different
+stories about the same file. The fix was to give the bind to the mode whose claim it enforces
+(`split`) and leave the seal as telemetry everywhere else. A layer should be able to say which
+claim it is enforcing; if it cannot, it is guarding something nobody promised.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)

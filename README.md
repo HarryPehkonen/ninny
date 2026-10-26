@@ -293,7 +293,9 @@ its own trajectory instead of from a note somebody wrote down.
 --tdd off
 ```
 
-`enforce` orders the writes. `split` is the one that makes a claim about the **artifact**: the
+`enforce` orders the writes. `split` is the one that makes a claim about the **artifact** -- and the
+read-only bind is `split`'s alone, because the bind is what enforces that claim. Every other mode
+compares the suite at handback and reports `suite_frozen_since_red` without freezing anything: the
 moment a red is banked, the files that failed are frozen (`--ro-bind` per bash action, so a shell
 heredoc cannot route around it) and the record says whether the tests handed back are the tests
 that were red. Adding *new* test files after the red is still allowed, and counted separately.

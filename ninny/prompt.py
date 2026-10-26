@@ -32,8 +32,11 @@ Each reply must contain at least one tool call.
 2. `write_file` -- write a file, creating parent directories. Prefer this over a
    heredoc: quoting a whole file through a shell is where models most often
    corrupt their own work.
-3. `read_file` -- read a file, optionally with a line range.
-4. `run_tests` -- run your own tests and see the result. A non-zero exit means they
+3. `edit_file` -- change part of an existing file in place: give the exact text to replace
+   and what to replace it with. Use this instead of rewriting a file you are changing
+   one function of; it replaces only when that text appears exactly once.
+4. `read_file` -- read a file, optionally with a line range.
+5. `run_tests` -- run your own tests and see the result. A non-zero exit means they
    failed.
 
 Finish by calling `bash` with exactly this command and nothing else:
@@ -115,8 +118,9 @@ you implemented and run them.
 SEAL_NOTICE = """## The suite is compared at handback
 
 The record compares the test files you hand back against the test files that were red.
-Change a file that was red -- with `write_file`, from the shell, or by moving it out of the
-way -- and the run is recorded as a broken seal, and "a failing test was seen first" stops
+Change a file that was red -- with `write_file`, with `edit_file`, from the shell, or by moving
+it out of the way -- and the run is recorded as a broken seal, and "a failing test was seen
+first" stops
 meaning what a reader would take it to mean. Test files you ADD afterwards are allowed and
 counted separately.
 
@@ -172,6 +176,7 @@ def format_error_message(response, note: str, wire: str) -> str:
         )
     return (
         "Your previous reply contained no tool call, so nothing happened. "
-        "Every reply must contain at least one tool call: bash, write_file, read_file or run_tests."
+        "Every reply must contain at least one tool call: bash, write_file, edit_file, "
+        "read_file or run_tests."
         + (f"\n({note})" if note else "")
     )

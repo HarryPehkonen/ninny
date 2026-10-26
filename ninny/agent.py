@@ -284,17 +284,32 @@ class Agent:
             self.messages.append({"role": "user", "content": f"Result:\n{text}"})
 
     def _enforce_seal(self, state) -> None:
-        """Make the sealed suite read-only the moment a red is banked.
+        """Make the sealed suite read-only the moment a red is banked -- in `split` only.
 
         The gate refuses a `write_file` into a sealed test file, but a shell heredoc is not a
         `write_file`: the first live `split` run rewrote its failing test through one and the
-        gate never saw it. So the seal is enforced where the shell cannot route around it --
-        the sandbox binds each sealed file read-only for the remainder of the run.
+        gate never saw it. So where the artifact claim lives, the seal is enforced where the shell
+        cannot route around it -- the sandbox binds each sealed file read-only for the run.
+
+        The bind is the *enforcement* of that claim, so it belongs to `split` and to no other
+        mode. Everywhere else the seal is telemetry: `close_seal` still compares the suite at
+        handback and `suite_frozen_since_red` still reports it. Binding in `enforce` made two
+        layers disagree about one path -- bash was physically blocked while the file tools, which
+        run in this process and not inside the sandbox, went straight past it -- and it stopped a
+        run from fixing an assertion it had got wrong, which is the failure the `bits` arms hit.
 
         Reported either way, and the record says which: a seal that is only *reported* is a
         different claim from one that is *enforced*, and collapsing them would let the weaker
         one read as the stronger.
         """
+        if self.policy.mode != "split":
+            if state.sealed and not self._sealed_applied:
+                self._sealed_applied = True
+                self.log(
+                    f"[seal] recorded, not enforced: {self.policy.mode} makes no artifact claim "
+                    f"-- the suite is compared at handback ({', '.join(sorted(state.sealed))})"
+                )
+            return
         sealed = state.sealed or {}
         if not sealed or self._sealed_applied:
             return
