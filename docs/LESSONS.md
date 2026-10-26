@@ -637,6 +637,13 @@ check, and one loud check can hide a broken one.** Check 2 failing loudly was wh
 check 3 -- exactly as a RED at step 8 made the missing GREEN unobservable. Both times the hiding was
 done by a *correct* signal that happened to speak first.
 
+**And the discipline applies to the commit messages, not only to the arms.** Phase 2's message said the
+split block went "29 -> 9 lines" and the prompt "100 -> 92". The measurement says 13 and 84. The numbers
+were written before the measurement ran -- the exact failure the GREEN rule now catches in an arm: a
+claim written where an observation was available and cheaper. In the arms the fix is "run it rather than
+ask"; here it is "measure it before writing it down". It mattered because a reader auditing the commit
+would have found two numbers that no tool in this repo produces.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)
