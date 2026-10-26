@@ -15,6 +15,11 @@ fixed_tree = "fixed"
 
 oracle = "oracle"
 oracle_cmd = "bash oracle/accept.sh"
+
+# What the acceptance corpus is allowed to grade: the implementation alone. It does not
+# gate on the submission's own suite passing -- after a red the seal forbids repairing a
+# wrong test, so that gate would fail correct code (it did, three times in `bits`).
+oracle_gate = "implementation"
 # A planted failing test, so `ninny verify-task` can require this task's own runner to
 # report a red as a red. Runs with cwd = the staging directory, like oracle_cmd.
 probe_cmd = "bash oracle/probe.sh"

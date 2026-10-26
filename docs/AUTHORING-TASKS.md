@@ -102,6 +102,29 @@ through would bank a build error as a RED. The runner separates them -- `error[E
 nothing ran (2), anything else non-zero means tests failed (1) -- and sums `N passed`
 across targets, because `0 passed` is a green run.
 
+## The oracle grades the implementation
+
+`oracle_gate = "implementation"`, and it is the only value the loader accepts. Stated in every
+`task.toml` so the standard is visible instead of inferred, and refused at load time so a task
+cannot quietly declare the other one.
+
+An oracle **may** drive the submission with a corpus of its own -- `accept.sh` plus a frozen
+acceptance suite, compiled or run against the submission's code. That is what decides whether a
+run was any good, and it is the only thing that does.
+
+An oracle **may not** gate acceptance on the submission's own test files passing. Once a suite
+has gone red the seal forbids repairing it, so a model that wrote one wrong assertion -- a
+boundary guard, say -- can never reach green again however right its implementation is. Three
+live `bits` arms failed acceptance exactly that way, with an implementation the corpus passed.
+If you want to know how the handback looked, **record** the shipped suite's colour with a line a
+reader can grep:
+
+```
+note "shipped suite: builds, does not pass"
+```
+
+A gate the harness itself blocks is a trap, not a standard.
+
 ## Other traps, each hit once
 
 - **`oracle = "oracle"` must be in `task.toml`.** Without it the oracle directory is not

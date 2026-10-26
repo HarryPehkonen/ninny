@@ -2,9 +2,9 @@
 # The oracle for the bits task. It runs OUTSIDE the agent's tree: `ninny check` stages the
 # submission beside this directory and hands the path in as NINNY_TREE.
 #
-# Three things: the frozen files are unchanged, the submission's own suite exists and
-# passes (so the library is actually tested, not just built), and a corpus of its own
-# written as gtest and compiled against the submission's header.
+# Three things: the frozen files are unchanged, the colour of the submission's own suite
+# (recorded, never graded -- see below), and a corpus of its own written as gtest and
+# compiled against the submission's header.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 TREE=${NINNY_TREE:?the harness must set NINNY_TREE to the staged tree}
@@ -13,6 +13,9 @@ failures=0
 checks=0
 fail() { failures=$((failures + 1)); echo "FAIL $*"; }
 pass() { checks=$((checks + 1)); echo "ok   $*"; }
+# A recorded observation is not a check. It reports something a reader needs and grades
+# nothing -- the distinction the `bits` task got wrong, and paid for three times.
+note() { echo "note $*"; }
 
 # 1. The frozen instrument did not move. CMakeLists.txt is deliberately NOT hashed: the
 #    corpus appends its own target to it below, and only the "YOUR TESTS" region is the
@@ -38,21 +41,26 @@ if [ -f "$HERE/frozen-cmake.sha256" ]; then
   fi
 fi
 
-# 2. The submission's own suite must build and pass. A library that only builds is a
-#    library nobody checked.
+# 2. The colour of the submission's own suite: RECORDED, not graded.
+#
+#    This used to be a failure, and it failed correct code three times. Once a suite has gone
+#    red the seal forbids repairing it, so a model that wrote one wrong assertion -- a boundary
+#    guard, say -- can never reach green again however right its implementation is. All three
+#    arms had an implementation the acceptance corpus passed. The corpus below decides; this
+#    line is what a reader needs in order to know how the handback looked.
 build_dir=$TREE/.ninny-build-oracle
 if ! cmake -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Debug >"$build_dir.log" 2>&1; then
-  fail "the submission's CMake configure failed"
+  note "shipped suite: the submission's CMake configure failed"
 else
   if ! cmake --build "$build_dir" -j 4 >>"$build_dir.log" 2>&1; then
-    fail "the submission's own tests do not build"
+    note "shipped suite: does not build"
   else
     out=$(ctest --test-dir "$build_dir" --output-on-failure 2>&1)
     if [ $? -ne 0 ] || printf '%s\n' "$out" | grep -qi "No tests were found"; then
-      fail "the submission's own tests do not pass"
+      note "shipped suite: builds, does not pass"
       printf '%s\n' "$out" | grep -E "Failed|error" | head -10
     else
-      pass "the submission's own tests build and pass"
+      pass "shipped suite: builds and passes"
     fi
   fi
 fi
@@ -76,12 +84,24 @@ else
     fail "the acceptance corpus does not compile against this submission"
     grep -E "error:" "$build_dir.log" | head -10
   else
-    out=$(ctest --test-dir "$build_dir" --output-on-failure -R ninny_acceptance 2>&1)
-    if [ $? -ne 0 ]; then
+    #    Run the corpus's own binary, NOT `ctest -R ninny_acceptance`. gtest discovery
+    #    registers nothing under this project, and `ctest` exits 0 saying "No tests were
+    #    found!!!" -- which this check read as a pass for the whole campaign, in every tree
+    #    including the answer key, until the day check 2 stopped failing first and the
+    #    answer-key control caught it. The count is asserted against the corpus source as
+    #    well, so it cannot shrink in silence: the same anti-vacuous rule a task applies to
+    #    the model's suite.
+    want=$(grep -cE '^(TEST|TEST_F|TEST_P)\(' "$HERE/acceptance.cpp")
+    out=$("$build_dir/ninny_acceptance" --gtest_color=no 2>&1)
+    rc=$?
+    ran=$(printf '%s\n' "$out" | sed -n 's/^\[==========\] \([0-9][0-9]*\) tests\? from .*/\1/p' | tail -1)
+    if [ "$rc" -ne 0 ]; then
       fail "the acceptance corpus fails against this submission"
-      printf '%s\n' "$out" | grep -E "Failed|Failure" | head -12
+      printf '%s\n' "$out" | grep -E "^\[  FAILED  \]" | head -12
+    elif [ -z "$ran" ] || [ "$ran" -ne "$want" ]; then
+      fail "the acceptance corpus ran ${ran:-no} tests, expected $want -- it did not grade"
     else
-      pass "the acceptance corpus builds and passes"
+      pass "the acceptance corpus ran $ran tests, all passed"
     fi
   fi
 fi

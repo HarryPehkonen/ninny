@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ninny import SUBMIT_SENTINEL, UPSTREAM, UPSTREAM_URL, __version__
-from ninny.actions import TOOLS, parse_reply, validate
+from ninny.actions import TOOLS, Action, parse_reply, validate
 from ninny.artifacts import tree_digest
 from ninny.prompt import SYSTEM_TEMPLATE, format_error_message, render_instance
 from ninny.tdd import PHASE_LABELS
@@ -186,6 +186,30 @@ class Agent:
                 suspect = ""
                 if action.name == "bash":
                     suspect = self.env.looks_like_src_write(action.command)
+
+                # The observation gap, closed by the harness rather than by asking. A submit
+                # whose suite has not run since the last source change is a claim, not an
+                # observation, and three live arms handed back exactly that while the record
+                # could not see it. The harness takes the observation itself, marks it as its
+                # own, and lets the ordinary rules judge what it found.
+                # Only where there is a suite to observe. A run that never wrote a test is
+                # already reported as `no-tests`, and running its empty suite would produce a
+                # "your tests are failing" the model never earned.
+                if (
+                    action.is_submit()
+                    and self.policy.require_green
+                    and state.test_files
+                    and state.suite_stale
+                ):
+                    fresh = self.env.execute(Action(name="run_tests", args={}))
+                    self.policy.note_harness_run(
+                        state, step, fresh.exit_code if fresh.exit_code is not None else -1
+                    )
+                    self.log(
+                        f"[step {step}] the suite was stale at handback; "
+                        f"harness ran it -> exit {fresh.exit_code}"
+                    )
+
                 refusal = self.policy.gate(action, state, step, suspect)
                 if not refusal and action.is_submit():
                     refusal = self.policy.gate_submit_reverse(state, step)

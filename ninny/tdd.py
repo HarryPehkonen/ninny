@@ -93,6 +93,17 @@ class TDDState:
     # Kept beside test_runs rather than inside it so the documented shape of test_runs
     # (step, exit code) does not change under anyone reading the record.
     test_counts: list[list[int]] = field(default_factory=list)
+    # The observation gap. `red-first` describes the ORDER of the writes; this describes
+    # whether the suite was observed at all after the code it is supposed to describe.
+    # Three live `bits` arms handed back a correct implementation and a suite nobody had run
+    # for twenty-plus steps, and the record could not see it: one RED at step 8 made
+    # `own_gate_red` true for the rest of the run.
+    last_run_step: int | None = None
+    last_src_step: int | None = None
+    #: Runs the HARNESS made, not the model: [step, exit]. A submit arrived without an
+    #: observation of the tree being handed back, so the harness took one and said so here.
+    harness_runs: list[list[int]] = field(default_factory=list)
+    suite_stale_at_submit: bool = False
     refusals: list[list] = field(default_factory=list)
     bypass_detected: list[list] = field(default_factory=list)
     submit_refusals: int = 0
@@ -116,6 +127,29 @@ class TDDState:
     def own_gate_red(self) -> bool:
         """The arm's own test command was last seen failing."""
         return bool(self.test_runs) and self.test_runs[-1][1] != 0
+
+    @property
+    def suite_stale(self) -> bool:
+        """No test run has been observed since the last source change.
+
+        A run at the same step as the write counts as fresh: the order within one step is
+        not recorded, and reading it as stale would invent a fact the record does not have.
+        """
+        if self.last_run_step is None:
+            return True
+        return self.last_src_step is not None and self.last_src_step > self.last_run_step
+
+    @property
+    def green_after_last_write(self) -> bool | None:
+        """Whether the shipped tree was last observed green; None when nothing covers it.
+
+        None is not a failure and not a pass: it means the suite was never run against the
+        code that is being handed back, and a reader should be told that rather than shown
+        a green light nobody earned.
+        """
+        if self.last_run_step is None or self.suite_stale:
+            return None
+        return bool(self.test_runs) and self.test_runs[-1][1] == PASSED_EXIT
 
     @property
     def red_ok(self) -> bool:
@@ -151,6 +185,13 @@ class TDDState:
             # The case counts the runner reported, [step, count] per run that reported one.
             # A suite that shrank asserts less without failing, and this is the only trace.
             "test_counts": self.test_counts,
+            "last_run_step": self.last_run_step,
+            "last_src_step": self.last_src_step,
+            "suite_stale_at_submit": self.suite_stale_at_submit,
+            # Who ran the suite at handback, and what the tree it was run against looked
+            # like: None = never observed, True = seen green, False = seen failing.
+            "green_after_last_write": self.green_after_last_write,
+            "harness_runs": self.harness_runs,
             "refusals": self.refusals,
             "bypass_detected": self.bypass_detected,
             "submit_refusals": self.submit_refusals,
@@ -401,11 +442,13 @@ class TDDPolicy:
             elif self.task.is_src_path(rel) and observation.ok:
                 if state.first_src_step is None:
                     state.first_src_step = step
+                state.last_src_step = step
                 if state.red_ok:
                     self._enter(state, "impl", step)
         elif action.name == "run_tests":
             code = observation.exit_code if observation.exit_code is not None else -1
             state.test_runs.append([step, code])
+            state.last_run_step = step
             # The count, when the task's runner reported one. It is what makes a suite
             # getting smaller visible: nothing fails, it just asserts less.
             count = getattr(observation, "tests", None)
@@ -436,6 +479,22 @@ class TDDPolicy:
                 self._enter(state, "impl", step)
         elif action.is_submit():
             self._enter(state, "done", step)
+
+    def note_harness_run(self, state: TDDState, step: int, exit_code: int) -> None:
+        """Record a run the HARNESS made, because the model's submit came without one.
+
+        It lands in `test_runs` too, because every later question -- is it green, is it
+        stale -- is about the most recent observation, whoever took it. It lands in
+        `harness_runs` as well, so a reader can always tell whose step it was, and
+        `suite_stale_at_submit` keeps the fact that the model handed back a tree it had
+        not run, whether or not the harness then found it green.
+        """
+        state.test_runs.append([step, exit_code])
+        state.harness_runs.append([step, exit_code])
+        state.last_run_step = step
+        state.suite_stale_at_submit = True
+        if state.red_ok:
+            self._enter(state, "impl", step)
 
     def close_seal(self, state: TDDState) -> None:
         """Was the suite handed back the suite that was red?
@@ -475,8 +534,12 @@ class TDDPolicy:
         """
         current = snapshot(self.workdir, self.task.src_globs)
         changed = [path for path, signature in current.items() if self._baseline_src.get(path) != signature]
-        if changed and state.first_src_step is None:
-            state.first_src_step = step
+        if changed:
+            if state.first_src_step is None:
+                state.first_src_step = step
+            # The tree is the ground truth for the observation gap as well: a source change
+            # through a route the action log cannot see still makes the last run stale.
+            state.last_src_step = step
         if self.mode == "enforce" and state.phase == "test":
             for path in changed:
                 entry = [step, path]

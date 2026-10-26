@@ -58,6 +58,15 @@ class Task:
     # and the failure looks like the model's. Declaring it here means the sandbox plan
     # can print what the run was able to see.
     sandbox_binds: list[str] = field(default_factory=list)
+    #: What the acceptance corpus is allowed to grade. One value, on purpose.
+    #:
+    #: After a red the seal forbids repairing a test file, so an oracle that gates acceptance
+    #: on the submission's own suite passing fails correct code it forbade the model to fix.
+    #: It did, three times in `bits`: every arm had an implementation the corpus passed, and
+    #: failed on "the submission's own tests do not pass" over a boundary guard in a sealed
+    #: file. Declared per task so the standard is stated rather than inferred, and refused by
+    #: the loader if it says anything else.
+    oracle_gate: str = "implementation"
     meta: dict = field(default_factory=dict)
 
     def is_test_path(self, rel: str) -> bool:
@@ -110,6 +119,7 @@ def load_task(path: str | Path) -> Task:
         oracle_dir=oracle_dir,
         test_cmd=test_cmd,
         oracle_cmd=data.get("oracle_cmd"),
+        oracle_gate=_oracle_gate(data),
         test_globs=list(data.get("test_globs", ["tests/own/**"])),
         src_globs=list(data.get("src_globs", ["src/**"])),
         protected_globs=list(data.get("protected_globs", [])),
@@ -126,6 +136,21 @@ def load_task(path: str | Path) -> Task:
         ],
         meta={k: v for k, v in data.items() if k not in _KNOWN_KEYS},
     )
+
+
+def _oracle_gate(data: dict) -> str:
+    """The one standard an oracle may declare, or a refusal that explains itself."""
+    gate = data.get("oracle_gate", "implementation")
+    if gate != "implementation":
+        raise ConfigError(
+            f'oracle_gate must be "implementation" (got {gate!r}). An oracle may grade the '
+            "implementation with an external corpus. It may not gate acceptance on the "
+            "submission's own test files passing: once a suite has gone red the seal forbids "
+            "repairing it, so that gate fails correct code -- it did, three times in `bits`. "
+            "Record the shipped suite's colour in the oracle instead, with a line a reader "
+            "can grep; do not fail on it."
+        )
+    return gate
 
 
 def _assert_oracle_outside_tree(oracle_dir: Path, tree_src: Path) -> None:
@@ -146,5 +171,6 @@ def _assert_oracle_outside_tree(oracle_dir: Path, tree_src: Path) -> None:
 _KNOWN_KEYS = {
     "name", "spec_file", "tree", "oracle", "test_cmd", "oracle_cmd",
     "test_globs", "src_globs", "preflight", "step_limit", "timeout_s",
-    "test_timeout_s", "protected_globs", "sandbox_binds",
+    "test_timeout_s", "protected_globs", "sandbox_binds", "oracle_gate",
+    "sabotage_target",
 }
