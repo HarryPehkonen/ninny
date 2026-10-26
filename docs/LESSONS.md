@@ -623,6 +623,20 @@ test that is wrong cannot be repaired, so bits' gate is one the model is forbidd
 diagnosed its boundary guard in a comment, in a new file, because the sealed one had no write path. A
 gate the harness itself blocks is a trap, not a standard.
 
+**And the check that said so graded nothing.** When check 2 stopped failing first, the answer-key
+control caught what it had been hiding: bits' check 3 ran `ctest -R ninny_acceptance`, which finds no
+tests under this project, prints "No tests were found!!!" and exits 0 -- read as a pass. In every tree,
+including the answer key, for the whole campaign. So "the acceptance corpus passes" was a sentence
+about a corpus that never ran, and the three arms' acceptance verdicts rested on it. The corpus was
+honest all along -- run directly it passes 9/9 on arm 1's implementation and fails 9/9 on the stub --
+but the plumbing was not. Check 3 now runs the binary itself and asserts the count against the corpus
+source, so it can neither be vacuous nor shrink in silence.
+
+The lesson is the one this repo keeps teaching from a new angle: **a check that cannot fail is not a
+check, and one loud check can hide a broken one.** Check 2 failing loudly was why nobody looked at
+check 3 -- exactly as a RED at step 8 made the missing GREEN unobservable. Both times the hiding was
+done by a *correct* signal that happened to speak first.
+
 ## The adapter layer: six copies of one bug class (2026-10-23)
 
 **Resolved:** the six hand-written adapters are now configs (`[runner]` in each `task.toml`)
