@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ninny"
+version = "0.1.0"
+description = "A tiny, dependency-free coding-agent harness that enforces and measures process, not just outcomes"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE.md" }
+authors = [{ name = "Harri Pehkonen" }]
+keywords = ["agent", "harness", "evaluation", "tdd", "test-first"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Testing",
+]
+# Deliberately empty. Ninny runs on the standard library alone.
+dependencies = []
+
+[project.urls]
+Upstream = "https://github.com/SWE-agent/mini-swe-agent"
+Homepage = "https://github.com/HarryPehkonen/ninny"
+Repository = "https://github.com/HarryPehkonen/ninny"
+Issues = "https://github.com/HarryPehkonen/ninny/issues"
+
+[project.scripts]
+ninny = "ninny.cli:main"
+
+[tool.setuptools]
+packages = ["ninny"]

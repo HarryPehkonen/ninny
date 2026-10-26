@@ -1,0 +1,45 @@
+name = "dogfood-stamp"
+spec_file = "SPEC.md"
+tree = "tree"
+
+# The same harness one change later, used ONLY by `ninny verify-task` to prove the oracle can
+# pass. tree/ is the harness at the commit this task was cut from; fixed/ is that source with
+# the stamp implemented, so the two differ in exactly the one change.
+fixed_tree = "fixed"
+
+# The acceptance corpus lives OUTSIDE the tree -- and it carries its own pristine copy of the
+# harness's test suite, so what it grades is the submission's `ninny/`, never the submission's
+# tests/. Editing tests/ in the tree changes nothing out here; that is reported, not graded.
+oracle = "oracle"
+oracle_cmd = "bash oracle/accept.sh"
+
+# What the corpus is allowed to grade: the implementation. The 248 frozen tests and the stamp
+# contract both grade the package, not the submission's own suite.
+oracle_gate = "implementation"
+
+# A planted failing test, so `ninny verify-task` can require this task's runner to call a red a
+# red rather than "nothing ran".
+probe_cmd = "bash oracle/probe.sh"
+sabotage_target = "ninny/artifacts.py"
+
+# The agent's own test loop: the harness's own suite, which starts GREEN here, plus any test the
+# agent adds under tests/. A red is therefore something it wrote.
+test_cmd = "bash tools/run_own_tests.sh"
+
+test_globs = ["tests/**"]
+src_globs = ["ninny/**"]
+protected_globs = ["tools/**"]
+
+preflight = ["python3 -V"]
+step_limit = 30
+timeout_s = 120
+test_timeout_s = 180
+
+[runner]
+about = 'Python / unittest. Every tests/test*.py, including the 248 tests the harness ships.'
+note = '''discover -s tests -t . is deliberate: the tests import the package beside them, so the tree root
+is the import root. This suite is green on the tree you were given: a red is something you wrote, and
+a red you earned by touching the harness is still a red. "Ran 0 tests" is exit 2, not a green.'''
+run = 'python3 -m unittest discover -s tests -t .'
+build_fail = '_FailedTest|Failed to import test module|^SyntaxError|^IndentationError'
+sum = '^Ran ([0-9]+) tests?'
