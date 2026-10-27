@@ -51,6 +51,11 @@ class ThePreflightReadsTheArgumentsThatActuallyExist(unittest.TestCase):
         _, refusal = preflight_lines(self.task, self.dir, "edit src/sim.cpp", args)
         self.assertIn("REFUSING", refusal)
 
+    def test_the_repository_suite_timeout_is_a_dial(self):
+        """--test-timeout reaches repo_task; a repository has no task.toml to declare one in."""
+        self.assertEqual(self.parse("--test-timeout", "900").test_timeout, 900)
+        self.assertIsNone(self.parse().test_timeout)
+
 
 if __name__ == "__main__":
     unittest.main()

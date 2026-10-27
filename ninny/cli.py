@@ -218,7 +218,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     args.tdd = args.tdd or default_tdd_for(bool(args.repo), args.test_glob)
     task = (
         repo_task(Path(args.repo), repo_prompt(args), args.test_cmd or "",
-                  test_globs=args.test_glob, step_limit=args.steps or 60)
+                  test_globs=args.test_glob, step_limit=args.steps or 60,
+                  test_timeout_s=args.test_timeout or 600)
         if args.repo
         else load_task(_task_path(args.task))
     )
@@ -857,6 +858,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--steps", type=int, help="step limit (default: the task's)")
     run.add_argument("--wall-time", type=int, default=0, help="seconds; 0 = no limit")
     run.add_argument("--timeout", type=int, help="per bash action, seconds")
+    run.add_argument("--test-timeout", type=int,
+                     help="seconds for --repo's own suite (default 600); a task declares its own in "
+                          "task.toml")
     run.add_argument("--request-timeout", type=int, default=600, help="per model call, seconds")
     run.add_argument("--temperature", type=float)
     run.add_argument("--max-tokens", type=int)
