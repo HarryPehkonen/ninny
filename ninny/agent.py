@@ -20,7 +20,7 @@ from ninny import SUBMIT_SENTINEL, UPSTREAM, UPSTREAM_URL, __version__
 from ninny.actions import TOOLS, Action, parse_reply, validate
 from ninny.artifacts import tree_digest
 from ninny.prompt import SYSTEM_TEMPLATE, format_error_message, render_instance
-from ninny.tdd import PHASE_LABELS
+from ninny.tdd import PHASE_LABELS, budget_note
 
 
 @dataclass
@@ -151,6 +151,12 @@ class Agent:
             if self.wall_time_limit and time.time() - started > self.wall_time_limit:
                 result.exit_status = "WallTimeLimit"
                 break
+            notice = budget_note(self.step_limit, state, step)
+            if notice:
+                kind, text = notice
+                state.told.append([step, kind])
+                self.messages.append({"role": "user", "content": text})
+                self.log(f"[step {step}] told the model ({kind})")
             response = self.client.complete(self.messages, tools)
             result.api_calls += 1
             _merge_usage(result.usage, response.usage)

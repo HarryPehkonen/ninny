@@ -104,6 +104,10 @@ class TDDState:
     #: Every write that REPORTED success, as [step, path], test files included. Empty here
     #: means the run wrote nothing at all -- a weaker fact than `no-tests`; see `wrote_nothing`.
     write_steps: list[list] = field(default_factory=list)
+    #: What the model was TOLD, as [step, kind]: `silence` (nothing written at the halfway point)
+    #: and `budget` (the steps nearly gone). Without it, an arm that was told and an arm that was
+    #: not read identically in the record, and the experiment could not be scored.
+    told: list[list] = field(default_factory=list)
     first_test_step: int | None = None
     first_src_step: int | None = None
     red_step: int | None = None
@@ -226,6 +230,7 @@ class TDDState:
             "phase": self.phase,
             "verdict": self.verdict(),
             "write_steps": list(self.write_steps),
+            "told": list(self.told),
             #: Which rule decided the red. A record can then be read without its task, and a
             #: repository run is not graded against a benchmark's claim about its suite.
             "require_test_file": self.require_test_file,
@@ -281,6 +286,34 @@ def snapshot(workdir: Path, globs: list[str]) -> dict[str, str]:
                 except OSError:
                     continue
     return out
+
+
+def budget_note(step_limit: int, state: TDDState, step: int) -> tuple[str, str] | None:
+    """The note the model should be TOLD now, or None. Told, not blocked.
+
+    Two live repository runs spent every step they had reading -- 40 of 40 and 30 of 30, not one
+    write, not one test, not one edit between them -- and in both cases the loop gave no sign that
+    the budget existed and no sign that a brief's reconnaissance was over. The phase news intervenes
+    when a rule is broken; this intervenes when a budget is being spent, which no rule governs.
+
+    Each note is said ONCE, like the no-red submit nudge: a note that repeats stops being information
+    and becomes something to re-read every step. Returns (kind, text); the caller records the kind in
+    `state.told`, so a run that was told can be told apart from one that was not.
+    """
+    kinds = {kind for _, kind in state.told}
+    if "silence" not in kinds and state.wrote_nothing and step > step_limit * 0.5:
+        return "silence", (
+            f"You have spent {step} of {step_limit} steps and written nothing yet. Reading is not the "
+            "deliverable -- the handback is a patch. Take the first file the task names, write the "
+            "first failing test, and iterate from there."
+        )
+    if "budget" not in kinds and step_limit - step < max(3, int(step_limit * 0.15)):
+        return "budget", (
+            f"{step_limit - step} of {step_limit} steps remain. Hand back what you have now: a patch "
+            "that is incomplete but runs is judged on its merits, while a run that ends at the step "
+            "limit is judged on nothing at all."
+        )
+    return None
 
 
 class TDDPolicy:
