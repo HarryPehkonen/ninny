@@ -57,7 +57,9 @@ class RunResult:
             f"tokens: in={self.usage.get('prompt_tokens', 0)} out={self.usage.get('completion_tokens', 0)}\n"
             f"test-first: {verdict}  (mode={self.tdd.get('mode')}, "
             f"red_step={self.tdd.get('red_step')}{self._red_exit_note()}, "
-            f"first_src_step={self.tdd.get('first_src_step')}, refusals={len(self.tdd.get('refusals', []))}, "
+            f"first_src_step={self.tdd.get('first_src_step')}, "
+            f"writes={len(self.tdd.get('write_steps', []))}, "
+            f"refusals={len(self.tdd.get('refusals', []))}, "
             f"bypasses={len(self.tdd.get('bypass_detected', []))}, "
             f"suite_frozen={self._seal_note()})"
         )

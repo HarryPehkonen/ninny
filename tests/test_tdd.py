@@ -504,9 +504,19 @@ class SnapshotNoiseTests(TDDBase):
 
 
 class VerdictTests(TDDBase):
-    def test_no_tests_at_all(self):
+    def test_no_write_at_all_is_its_own_word(self):
+        """Nothing reached the tree, so the gate's phase was never entered. `no-tests` would
+        claim the run got there and skipped the test."""
         policy = self.policy_for("request")
         state = policy.new_state()
+        self.assertEqual(state.verdict(), "no-write")
+
+    def test_a_write_that_is_not_a_test_is_no_tests(self):
+        """The rule this replaced still holds where it applies: something was written, and
+        nothing written is a test under the globs."""
+        policy = self.policy_for("request")
+        state = policy.new_state()
+        self.apply(policy, state, self.write("src/thing.py"))
         self.assertEqual(state.verdict(), "no-tests")
 
     def test_tests_but_never_seen_to_fail(self):
@@ -537,7 +547,8 @@ class VerdictTests(TDDBase):
     def test_the_verdict_travels_in_the_state_dict(self):
         policy = self.policy_for("enforce")
         payload = policy.new_state().as_dict()
-        self.assertEqual(payload["verdict"], "no-tests")
+        self.assertEqual(payload["verdict"], "no-write")
+        self.assertEqual(payload["write_steps"], [])
         self.assertEqual(payload["mode"], "enforce")
 
 

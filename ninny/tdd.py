@@ -101,6 +101,9 @@ class TDDState:
     # (the trajectory stores the message itself).
     phase_news: str = ""
     test_files: list[str] = field(default_factory=list)
+    #: Every write that REPORTED success, as [step, path], test files included. Empty here
+    #: means the run wrote nothing at all -- a weaker fact than `no-tests`; see `wrote_nothing`.
+    write_steps: list[list] = field(default_factory=list)
     first_test_step: int | None = None
     first_src_step: int | None = None
     red_step: int | None = None
@@ -191,7 +194,24 @@ class TDDState:
         """A RED was seen, and it happened before the first source write."""
         return self.red_ok and (self.first_src_step is None or self.red_step < self.first_src_step)
 
+    @property
+    def wrote_nothing(self) -> bool:
+        """No write of any kind reported success.
+
+        `no-tests` in a benchmark means "you wrote no test file" -- it presumes the run entered
+        the test-first loop and skipped a step. A run that wrote nothing never entered it, so
+        `refusals=0` and `bypasses=0` are true of it and say nothing about compliance. This is
+        the flag that tells the two apart, and the word the summary leads with.
+
+        Hit for real 2026-10-27: `protekt-shotgun-1` spent 40 steps and 706 seconds reading a
+        123-TU C++ repository, wrote nothing, and was summarised as `refusals=0, bypasses=0`
+        beside a verdict of `no-tests`.
+        """
+        return not self.write_steps
+
     def verdict(self) -> str:
+        if self.wrote_nothing:
+            return "no-write"
         if not self.test_files:
             return "no-tests"
         if not self.red_ok:
@@ -205,6 +225,7 @@ class TDDState:
             "mode": self.mode,
             "phase": self.phase,
             "verdict": self.verdict(),
+            "write_steps": list(self.write_steps),
             #: Which rule decided the red. A record can then be read without its task, and a
             #: repository run is not graded against a benchmark's claim about its suite.
             "require_test_file": self.require_test_file,
@@ -492,6 +513,8 @@ class TDDPolicy:
     def observe(self, action, observation, state: TDDState, step: int) -> None:
         if action.name in WRITE_ACTIONS:
             rel = self._rel(action.path)
+            if observation.ok:
+                state.write_steps.append([step, rel])
             if self.task.is_test_path(rel) and observation.ok:
                 if rel not in state.test_files:
                     state.test_files.append(rel)
