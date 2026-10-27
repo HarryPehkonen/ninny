@@ -261,6 +261,6 @@ room, and two notes said once: that combination produced a handback the tool gra
 table says so: the same notes on a borrowed, moving subject produced patches that no one could hand back.
 
 **Adopted, unmodified.** That patch is now in the repository: it was applied as it came out of the run, and
-the suite it wrote passes with the suite that was already there (401 -> 406 tests). The evidence that made
+the suite it wrote passes with the suite that was already there (401 -> 404 tests). The evidence that made
 adoption reasonable is the record above, not the vendor of the patch -- which is the claim this project
 exists to make.
