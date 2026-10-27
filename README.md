@@ -149,9 +149,14 @@ python3 -m ninny run --task tasks/roman --model <model-id> --provider local
 
 # 3. judge it YOURSELF. The harness never grades its own subject.
 python3 -m ninny check --task tasks/roman --tree runs/roman/<arm>/tree
+
+# 4. and ask whether the handback is evidence at all: 0 artifact, 1 unproven, 2 nothing back
+python3 -m ninny verdict runs/roman/<arm>
 ```
 
-Step 2 prints a record; step 3 is the verdict, and it is run by hand, per run. A real run of
+Step 2 prints a record; step 3 is the artifact's verdict and step 4 the handback's, and both are
+run by hand, per run. `--provider` may be omitted: it defaults to `local`, whose endpoint
+`python3 -m ninny doctor` prints. A real run of
 the shipped example task, `deepseek/deepseek-v4.1-flash`, sandboxed with bubblewrap, defaults
 throughout (paths shortened; the record holds absolute ones):
 
@@ -173,15 +178,24 @@ exit 0
 
 ## What every run leaves behind
 
-A number you cannot re-derive is a rumour. Each invocation writes four things:
+A number you cannot re-derive is a rumour. A run directory holds five things, and `check` adds
+a sixth:
 
-- `trajectory.json` / `trajectory.md` — the record: every step, every refusal, the verdict,
-  the cost, and the hashes of the spec and the starting tree it came from
-- `diff.patch` — what the run actually changed, against the tree it started from
-- `oracle.log` — written by `check`: the verdict, and the output it came from
-- a **transcript in the state directory**, and one line in an index over every invocation
+- `trajectory.json` / `trajectory.md` — the record: every step, every refusal, the verdict, the
+  cost, and the hashes of the spec and the starting tree it came from
+- `diff.patch` — what the run actually changed, against the tree it started from. This is the
+  deliverable.
+- `result.json` — the record's machine-readable front matter, written **while the run is still
+  going**. Read it only after the process exits: a mid-run snapshot reports empty `test_runs`
+  and `red_step`, which reads exactly like a run that never tested anything.
+- `tree/` — the arm's working copy, left in place so the patch can be applied and the work read
+- `oracle.log` — written by `check`, **beside the tree it graded**, so a graded arm keeps its
+  evidence; absent until you run `check`
+- and, outside the run directory, a **transcript in the state directory** and one line in an
+  index over every invocation
 
-When a result is reported, all four paths are named.
+When a result is reported, the paths are named. `docs/DRIVING.md` is the full manual — the five
+commands, the limits, the brief, and the lines that look like failures and are not.
 
 `diff.patch` is not decoration. "What did it change?" used to be answered by diffing two
 directories by hand, and that is how the last real bug in this project was found: a model
@@ -691,6 +705,12 @@ has stopped matching the repository.
 --sandbox none     # default: bash runs as you
 --sandbox bwrap    # every bash action runs in a namespace where only the tree exists
 --bwrap-path PATH  # a bwrap binary that is not on PATH
+```
+
+Already installed somewhere? Name it once and pass the variable:
+
+```bash
+BWRAP=$(command -v bwrap || echo ./root/usr/bin/bwrap)
 ```
 
 With `bwrap`, the agent cannot see your home directory, and cannot see the oracle you keep
