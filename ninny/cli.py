@@ -29,7 +29,7 @@ from pathlib import Path
 from ninny import UPSTREAM, UPSTREAM_URL, __version__, logs, verdict
 from ninny.agent import Agent
 from ninny.artifacts import write_diff
-from ninny.config import ConfigError, load_task, repo_task
+from ninny.config import ConfigError, bash_timeout_for, load_task, repo_task
 from ninny.env import Environment
 from ninny.model import PROVIDERS, ModelClient, ModelError
 from ninny.pricing import Pricing
@@ -222,7 +222,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     environment = Environment(
         workdir,
         sandbox,
-        timeout=args.timeout or task.timeout_s,
+        timeout=bash_timeout_for(task.test_timeout_s, args.timeout),
         test_cmd=task.test_cmd,
         test_timeout=task.test_timeout_s,
         allow_outside=args.allow_outside,

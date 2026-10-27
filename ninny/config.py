@@ -88,6 +88,21 @@ class Task:
         return _matches(rel, self.protected_globs)
 
 
+def bash_timeout_for(test_timeout_s: int, explicit: int | None = None) -> int:
+    """How long one bash action may take, given what the task declares for its suite.
+
+    A repository's gate is routinely slower than the 120 s default -- PROTEKT's `tools/ci.sh fast`
+    takes 121 s -- and a delegate that runs the suite through bash then gets a silent kill at the
+    exact moment it is looking for evidence, which reads afterwards like "it chose not to look".
+
+    So the floor is the declared test timeout: "the suite is slow" can never masquerade as "nothing
+    to see". An explicit `--timeout` still wins, because a caller who names a number means it.
+    """
+    if explicit:
+        return explicit
+    return max(120, int(test_timeout_s or 0))
+
+
 def repo_task(
     repo: str | Path,
     spec: str,
