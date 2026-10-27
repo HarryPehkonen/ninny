@@ -313,6 +313,35 @@ python3 -m ninny run --task tasks/roman --tdd enforce --tdd-prompt request   # b
 Both are recorded (`run.tdd_mode`, `run.tdd_prompt_mode`), so an arm can be identified from
 its own trajectory instead of from a note somebody wrote down.
 
+### What the model is told about its own budget
+
+The phase news intervenes when a *rule* is broken. Nothing in the loop used to intervene when a *budget* was
+being spent, and the two worst repository runs on this machine show what that costs: 40 of 40 steps and 30 of
+30 spent reading, zero writes between them, and a `diff.patch` of 13 bytes at the end. In both cases the
+brief itself had ordered the reading ("read these before writing anything"), and the model had no way to know
+how much budget was left, or that it had written nothing.
+
+Two notes, each said **once**, appended as a user message before the step's model call:
+
+- **at half the budget, if nothing has been written yet**: *you have spent N of M steps and written nothing;
+  reading is not the deliverable -- the handback is a patch.*
+- **when under 15% of the steps remain**: *N steps remain of M; hand back what you have.*
+
+Both are recorded in `told` in the result, so an arm that was told and an arm that was not can never read
+alike.
+
+Measured (2026-10-27 — one brief, two arms per condition, same model, same 40-step budget, `--tdd enforce`):
+
+    baseline  40/40 steps  0 writes  no-write    diff     13 bytes
+    told      40/40 steps  4 writes  red-first   diff 11,644 bytes / 3 files
+    told      40/40 steps  4 writes  red-first   diff  4,720 bytes / 3 files
+
+Both told arms wrote a failing test first, ran the suite and iterated; the second was building with
+`cmake --build` and running the test binary directly when its budget ended. What the notes did **not** do is
+produce a handback — all four arms hit the step limit. The honest claim is that they stop the total loss, not
+that they finish the work; a budget sized to the brief is the other half, and the preflight prints what a
+caller needs in order to size it.
+
 ## Test-first, as a state machine
 
 ```bash

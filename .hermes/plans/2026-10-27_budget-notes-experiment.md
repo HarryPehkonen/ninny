@@ -79,8 +79,11 @@ that had in fact run the suite at step 34. Read the record when the run is over,
   → `GREEN` at 35 → tried to hand back and was refused: *"your own tests are failing — the last
   `run_tests` run exited non-zero… A handover on a red tree is not a result."* → kept working, wrote
   source at 37 and edited the test at 38 → step limit.
-- `told-2`: note at 21 → test at **step 26** → suite at 33 (`exit 1`) → wrote source at 36, 40, and a
-  header at 37 → step limit. Never attempted a submit.
+- `told-2`: note at 21 → test at **step 26** → suite at 33 (`exit 1`) → source edit at 36, header at 37,
+  **`cmake --build build -j$(nproc)` at 38 and the test binary run directly at 39** → source edit at 40 →
+  step limit. Never attempted a submit. Diff: `3 files changed, 31 insertions(+), 6 deletions(-)`. In full:
+  it wrote a test, saw it fail, implemented, built, ran the tests and iterated — the whole red-first loop —
+  and was cut off *mid-iteration*, not mid-search.
 - `base-1`: 40 steps of reading, no write, no test run, no submit, 13-byte empty patch.
 
 **Protections that fired, unprompted, in both `told` arms:** `told-1` had a write to `tools/probe3.cpp`
