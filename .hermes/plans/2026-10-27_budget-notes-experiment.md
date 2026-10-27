@@ -193,3 +193,25 @@ state is part of the experiment rather than a coincidence in someone else's day.
 - `budget-base-2`, still running when he said this, is the last PROTEKT datum and is reported as exactly
   that: one arm against a moving tree. No further arms run there.
 
+## NEXT EXPERIMENT, pre-registered — repository mode on a subject this project owns
+
+**Why this subject.** PROTEKT is out (see above). Repository mode needs a repository whose state is part of
+the experiment, so this runs against **Ninny itself**, whose only editor is this conversation. The brief is a
+real pending item from the caller-guidance design — item 3: state the suite's *measured* duration in the
+preflight, because a duration is what tells a caller whether 40 steps is a budget or a trap.
+
+**Arms.** `ninny-duration-1`, `ninny-duration-2`: `--repo ~/hermes-workspace/ninny`,
+`--prompt-file .hermes/plans/2026-10-27_suite-duration-brief.md`, `--test-cmd "bash scripts/run-tests.sh"`,
+`--test-glob 'tests/*.py'`, `--tdd enforce`, `--steps 60`, model `deepseek/deepseek-v4.1-flash`.
+
+**Prediction.** At least one arm reaches `Submitted` **with `green_after_last_write` set**, and its patch is
+small enough to read in a minute. The brief names the first file and the first test, so the reading that ate
+the PROTEKT runs has nothing to feed on — which is the prediction's real content: *a brief with an entry
+point spends its budget solving instead of orienting.*
+
+**What would falsify it.** Both arms at `StepLimit` with no submit, or a patch touching files the brief did
+not name. Either one means the entry point was not the problem, and the next suspect is step efficiency on a
+400-test repository.
+
+**Cost ceiling.** ≤ $0.20 per arm (60 steps on a small tree, with a 6 s suite).
+
