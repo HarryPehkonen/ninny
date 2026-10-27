@@ -292,3 +292,29 @@ Clause 1 of the prediction -- baselines write nothing, told arms write -- held 2
 handback -- failed 0/4 on the borrowed subject and held 2/2 on the owned one, which is the cleanest statement
 of what the correction was worth. Total spend for the six arms: $0.6253, and the two that worked were the two
 cheapest.
+
+## THE SHARPEST FINDING — `duration-1` needed no note at all
+
+`duration-1`'s notification arrived last and settles which lever was pulling.
+
+    told            []                      <- the silence note never fired
+    red_step        23   first_src_step 24  <- a failing test 8 steps before the halfway point
+    exit_status     Submitted   steps 41   cost $0.0573   verdict red-first
+    patch           2 files changed, 73 insertions(+), 2 deletions(-)  <- only the named files
+
+It wrote test-first, ran the suite and handed back **without ever being told anything**: the note fires only at
+half the budget, and by then this arm had already written a failing test and begun its implementation. The
+brief named the first file and the first test, and that was enough.
+
+So the priority is measurable now, and it is the reverse of where this started:
+
+- On a **borrowed, moving subject whose brief named no entry point**, the note was the only thing that
+  produced a write at all (0 -> 4 writes) and it never produced a handback.
+- On an **owned subject whose brief named its entry point**, one arm needed no note (it fired zero times) and
+  still handed back an artifact; the other was told at 31 and wrote at 31.
+
+**The brief is the primary lever; the note is the safety net for a brief that has none.** Both stay. The order
+to reach for them is no longer a matter of taste.
+
+One more precision: the falsification clause about touching unnamed files fired on `duration-2` (which added a
+third, new test file) and **not** on `duration-1`, whose patch is exactly the two files the brief named.
