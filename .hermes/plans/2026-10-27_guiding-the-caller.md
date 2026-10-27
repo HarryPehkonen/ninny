@@ -20,14 +20,13 @@ caller-side half: the dials a person sets before the model ever runs.
 
 ## Ranked, by what it costs and what it prevents
 
-1. **A preflight line at launch (cheap, certain).** Before the first model call, print the facts the caller
-   is deciding with: the repo's size in translation units; the declared test command, **and whether the
-   suite is currently GREEN or RED**; the step budget; the per-bash timeout against the suite's measured
-   duration; and whether the prompt names any path that exists in the tree. Those are checks, not
-   judgements — no model call, no guessing.
-2. **Refuse the deadlock (cheap, certain).** `--repo --tdd enforce` with no `--test-glob`, or with a suite
-   that is currently GREEN, cannot be satisfied: every way to make a red is itself a write the gate
-   refuses. Refuse the invocation and say that sentence, rather than spending 40 steps proving it.
+1. **A preflight line at launch — DONE.** Prints the repo's size in translation units, the test-source count,
+   the step budget, the suite's timeout against the shell timeout, and which of the paths the brief names
+   exist — with a warning when none of them do. **Deliberately left out: whether the suite is currently
+   GREEN or RED.** That needs an execution, so it is not free, and it belongs with item 3 instead.
+2. **Refuse the deadlock — DONE.** `--repo --tdd enforce` without `--test-glob` is refused with exit 2 and
+   the reason: every way to make a red is a write the gate refuses. (`enforce` *with* a glob is legal and
+   stays legal — a green suite does not deadlock it, because a test file may be written first.)
 3. **State the suite's duration (cheap, certain).** Time `--test-cmd` once in the preflight and print the
    number. It is what tells a caller whether 40 steps is a budget or a trap.
 4. **A brief template (cheap, high payoff).** Short and prescriptive: the first file to touch, the first

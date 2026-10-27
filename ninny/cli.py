@@ -143,6 +143,58 @@ def write_worktree_diff(worktree: Path, base: str, out_path: Path) -> str:
     return stat or "no changes"
 
 
+def preflight_lines(task, workdir: Path, prompt_text: str,
+                    args: argparse.Namespace) -> tuple[list[str], str]:
+    """What the caller is about to spend, said before the model runs, plus a refusal when the
+    invocation cannot be satisfied at all.
+
+    Written after two repository runs spent their whole budget reading a brief that named ten files and
+    never wrote anything (40 of 40 and 30 of 30 steps). Both times the reasonable question afterwards was
+    "why did it read for forty steps", and both times the answer was a number the caller had not been
+    shown -- the brief's own reading list against the budget set for it.
+
+    Every line is a count or a comparison, never a judgement: whether a task is well-posed is not
+    mechanically checkable, and a tool that pretends otherwise is worse than one that states facts.
+
+    Returns (lines, refusal); refusal is "" when the invocation can work.
+    """
+    import re
+
+    tree = Path(workdir)
+    units = sorted(p for p in tree.rglob("*") if p.suffix in {".cpp", ".cc", ".cxx", ".c"} and p.is_file())
+    tests = sorted(p for p in tree.rglob("*") if p.suffix in {".cpp", ".cc", ".cxx", ".py", ".js", ".ts"}
+                   and p.is_file() and "test" in str(p.relative_to(tree)).lower())
+    lines = [
+        f"{len(units)} translation units, {len(tests)} test sources, budget {args.steps} steps",
+        f"suite `{task.test_cmd}` gets {task.test_timeout_s}s; a single bash action gets "
+        f"{bash_timeout_for(task.test_timeout_s, args.timeout)}s",
+    ]
+
+    # Which paths the brief names, and whether they are there to be read. A brief that names nothing
+    # that exists has no entry point to start from, which is a fact worth stating out loud.
+    text = prompt_text
+    named = sorted(set(re.findall(r"[\w./-]*[\w-]+\.(?:cpp|cc|cxx|hpp|hh|h|py|js|ts|sh|md|txt|json|toml)",
+                                  text)))
+    missing = [name for name in named if not (tree / name).exists()]
+    if named:
+        lines.append(f"the brief names {len(named)} paths; {len(named) - len(missing)} exist in the tree"
+                     + (f", missing: {', '.join(missing[:4])}" if missing else ""))
+        if len(missing) == len(named):
+            lines.append("WARNING: the brief names no path that exists in the tree -- there is no entry "
+                         "point to start from, which is how a run spends its whole budget reading")
+    else:
+        lines.append("the brief names no file path at all -- no entry point to start from")
+
+    if args.tdd == "enforce" and not args.test_globs:
+        return lines, (
+            "REFUSING: --tdd enforce without --test-glob cannot be satisfied. enforce refuses a source "
+            "write until a test has been seen failing, and with no test glob the only thing that can make "
+            "a red is a write it will refuse. Pass --test-glob (e.g. --test-glob 'tests/*'), or use "
+            "--tdd request."
+        )
+    return lines, ""
+
+
 def _task_path(raw: str | None) -> Path:
     """`--task`, or the convention directory when the flag is omitted.
 
@@ -227,6 +279,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         test_timeout=task.test_timeout_s,
         allow_outside=args.allow_outside,
     )
+    if args.repo:
+        lines, refusal = preflight_lines(task, workdir, repo_prompt(args), args)
+        for line in lines:
+            print(f"preflight: {line}")
+        if refusal:
+            print(f"preflight: {refusal}")
+            return 2
     policy = TDDPolicy(args.tdd, task, workdir, require_green=not args.allow_red_submit)
     client = ModelClient(
         model=args.model,
