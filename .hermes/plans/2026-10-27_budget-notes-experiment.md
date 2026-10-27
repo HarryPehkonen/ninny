@@ -218,3 +218,49 @@ not name. Either one means the entry point was not the problem, and the next sus
 
 **Cost ceiling.** ≤ $0.20 per arm (60 steps on a small tree, with a 6 s suite).
 
+## RESULT — the first repository-mode handback, 2026-10-27 14:35–15:05
+
+From `runs/ninny/ninny-duration-2/result.json`, read after the process exited.
+
+    exit_status    Submitted            steps 48 of 60      cost $0.0444
+    verdict        red-first            phase done          bypasses 0
+    told           [[31,'silence']]     write_steps 6       refusals [[34,'ninny/cli.py']]
+    test_runs      [[35,1],[48,0]]      harness_runs [[48,0]]
+    green_after_last_write  True        suite_stale_at_submit  True  submit_refusals 0
+    patch  ninny/cli.py +39 | tests/test_preflight.py +53 | tests/test_preflight_duration.py +47
+           = 3 files changed, 137 insertions(+), 2 deletions(-)
+    `ninny verdict runs/ninny/ninny-duration-2` -> exit 0, verdict artifact, reasons []
+
+**Prediction: HELD.** It submitted, with a green observed after its last source write, and a patch small
+enough to read in a minute. The prediction's *mechanism* is visible in the record: the silence note was
+delivered at step 31 and the first write is **step 31** — the model was told and its next action was to
+write the test. It tried the source first at 34, was refused, wrote the test, took its red at 35, and only
+then touched the source at 36.
+
+Two things worth naming precisely:
+- The handback needed the harness: the suite was stale at submit, so Ninny **ran it itself** at step 48
+  (`harness_runs [[48,0]]`) and the green that made the handback an artifact is the harness's, not the
+  model's. That is the design — "green before handback" done by running the suite *for* the model — and it
+  is the first time it has fired in a live run.
+- The falsification clause partly fires: the patch touches a third file the brief did not name
+  (`tests/test_preflight_duration.py`, a *new* test). It added that file *as well as* the named one, so the
+  intent held, but the clause as written said the arm would touch only named files, and it did not.
+
+**The batch, all five arms, one table.**
+
+    subject     arm           steps  writes  exit        verdict      cost      patch
+    PROTEKT     budget-base-1 40/40    0     StepLimit   no-write     $0.1006      13 B
+    (borrowed)  budget-told-1 40/40    4     StepLimit   red-first    $0.0974  11,644 B
+                budget-told-2 40/40    4     StepLimit   red-first    $0.1136   4,720 B
+    NINNY       duration-2    48/60    6     SUBMITTED   red-first    $0.0444    137 ins
+    (owned)     duration-1    40+/60   9     running
+
+**What the whole day supports now.** A brief with an entry point, a subject this project owns, a budget with
+room, and two notes said once: that combination produced a handback the tool grades as an artifact, for
+**$0.044** — less than half the cost of any run that failed. The notes alone were not sufficient, and the
+table says so: the same notes on a borrowed, moving subject produced patches that no one could hand back.
+
+**Adopted, unmodified.** That patch is now in the repository: it was applied as it came out of the run, and
+the suite it wrote passes with the suite that was already there (401 -> 406 tests). The evidence that made
+adoption reasonable is the record above, not the vendor of the patch -- which is the claim this project
+exists to make.

@@ -33,7 +33,7 @@ from ninny.config import ConfigError, bash_timeout_for, load_task, repo_task
 from ninny.env import Environment
 from ninny.model import PROVIDERS, ModelClient, ModelError
 from ninny.pricing import Pricing
-from ninny.sandbox import SandboxError, build_sandbox, find_bwrap
+from ninny.sandbox import SandboxError, build_sandbox, child_env, find_bwrap
 from ninny.tdd import MODES, TDDPolicy, phases_line
 
 
@@ -143,6 +143,40 @@ def write_worktree_diff(worktree: Path, base: str, out_path: Path) -> str:
     return stat or "no changes"
 
 
+def _suite_duration(test_cmd: str, workdir: Path, timeout_s: int) -> str:
+    """A fragment stating how long the task's own suite took, or why it could not be timed.
+
+    The number the caller cannot otherwise see: the timeout says what the suite may spend, and
+    only a measurement says what it spends. Two repository runs read for their whole budget
+    against a 121 s suite, and no line ever said "121 s".
+
+    Measured in the working tree the run is scored in, through `bash -c` -- the same shell every
+    bash action goes through (`Sandbox.wrap`) -- so a suite that only works from somewhere else
+    is reported rather than quietly believed. It never raises: a preflight that kills a run is
+    worse than one line saying the suite could not run.
+    """
+    if not test_cmd:
+        return "was not timed (the task declares no test_cmd)"
+    limit = max(600, int(timeout_s or 0))
+    started = time.monotonic()
+    try:
+        done = subprocess.run(
+            ["bash", "-c", test_cmd], cwd=str(workdir), capture_output=True, text=True,
+            timeout=limit, env=child_env(),
+        )
+    except subprocess.TimeoutExpired:
+        return f"could not run (it did not finish within {limit}s)"
+    except OSError as exc:
+        return f"could not run ({type(exc).__name__}: {exc})"
+    elapsed = time.monotonic() - started
+    # 126/127 are the shell's "not executable"/"not found": the command never started, so the
+    # number next to it would be the cost of a failure, not of the suite. Any other exit is a
+    # suite that ran and said no -- still a duration the caller needs.
+    if done.returncode in (126, 127):
+        return f"could not run (exit {done.returncode})"
+    return f"took {elapsed:.1f}s"
+
+
 def preflight_lines(task, workdir: Path, prompt_text: str,
                     args: argparse.Namespace) -> tuple[list[str], str]:
     """What the caller is about to spend, said before the model runs, plus a refusal when the
@@ -164,9 +198,10 @@ def preflight_lines(task, workdir: Path, prompt_text: str,
     units = sorted(p for p in tree.rglob("*") if p.suffix in {".cpp", ".cc", ".cxx", ".c"} and p.is_file())
     tests = sorted(p for p in tree.rglob("*") if p.suffix in {".cpp", ".cc", ".cxx", ".py", ".js", ".ts"}
                    and p.is_file() and "test" in str(p.relative_to(tree)).lower())
+    duration = _suite_duration(task.test_cmd, tree, task.test_timeout_s)
     lines = [
         f"{len(units)} translation units, {len(tests)} test sources, budget {args.steps} steps",
-        f"suite `{task.test_cmd}` gets {task.test_timeout_s}s; a single bash action gets "
+        f"suite `{task.test_cmd}` {duration}; it gets {task.test_timeout_s}s, a single bash action "
         f"{bash_timeout_for(task.test_timeout_s, args.timeout)}s",
     ]
 
