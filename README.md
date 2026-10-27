@@ -650,6 +650,41 @@ A runnable instance of exactly this layout ships in
 snapshot instead of the live checkout, and an oracle outside the project.
 `ninny verify-task --task examples/existing-project` proves it in about a second.
 
+### The brief you hand it
+
+The biggest single lever on whether a repository run produces anything is the brief, and that is measured
+rather than asserted. Same model, same flags, same 40-step budget, two arms per condition:
+
+    a brief naming ~10 files in a 123-TU repo    0 writes, 13-byte patch,  no handback  ($0.10, $0.21)
+    a brief naming its first file and first test  7 writes, handback, verdict artifact  ($0.044, $0.057)
+
+Both pairs of runs had the budget notes (see "Told, and blocked" above). One arm of the second pair never
+received one — it had already written its failing test before the halfway point — and still handed back. What
+made the difference was that the second brief named an entry point, while the first, in its own words,
+"read these before writing anything": a reconnaissance order larger than the budget it was given.
+
+A brief that works, in full:
+
+```markdown
+# <the change, in one line>
+
+<one short paragraph: why, and what is wrong today>
+
+## What to change
+1. **First file to touch: `path/to/file.py`.** <what to do in it, and the shape of the result>
+2. **First test to write: `tests/test_thing.py`.** <what the case asserts>
+
+## Rules
+- <the constraints that matter: what may not change, what must not break>
+- Acceptance: `<the command>` -- the suite that will be run, and what it means when it fails.
+- Out of scope: <everything else, named, so that reading does not become the task>
+```
+
+Four things carry the weight: **the first file**, **the first test**, **the acceptance command**, and **what is
+out of scope**. The preflight checks what it can of this before a run spends anything: it counts the paths the
+brief names and reports the ones that are not in the tree, which is the cheapest way to find out that a brief
+has stopped matching the repository.
+
 ## Sandboxing
 
 ```bash
