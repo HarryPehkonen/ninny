@@ -420,6 +420,27 @@ def _stage(task, tree: Path, base: Path, label: str = "") -> Path:
     return work
 
 
+def _live_oracle_log(tree: Path, work: Path, output: str) -> Path:
+    """Write the oracle's output beside the tree it graded, and say where it went.
+
+    The staging directory is where the oracle RUNS, and it lives under TMPDIR -- which on some
+    machines is a scratch directory that prunes idle entries. A log left there is evidence with
+    a half-life, and "every run leaves an oracle log" is a claim this repository makes in two
+    places. So when the tree sits inside a run directory (its parent holds a result.json, the
+    thing that makes a directory a run) the log is written there, where the rest of the record
+    is; anywhere else the staging path stands, and an unwritable destination falls back to it
+    rather than losing the output.
+    """
+    if (tree.parent / "result.json").is_file():
+        durable = tree.parent / "oracle.log"
+        try:
+            durable.write_text(output)
+            return durable
+        except OSError:
+            pass
+    return work / "oracle.log"
+
+
 def _run_oracle(task, work: Path) -> tuple[int, str]:
     env = dict(os.environ)
     env["NINNY_TREE"] = str(work / "tree")
@@ -483,7 +504,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     print(f"ninny check: {task.oracle_cmd}   (cwd={work}, NINNY_TREE={work / 'tree'})")
     code, output = _run_oracle(task, work)
     print(output.rstrip())
-    print(f"\nexit {code}   log: {work / 'oracle.log'}")
+    print(f"\nexit {code}   log: {_live_oracle_log(tree, work, output)}")
     _record(args, task=task.name, verdict=_last_line(output))
     return code
 
