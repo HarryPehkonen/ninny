@@ -22,7 +22,7 @@ record, and a verdict a caller can gate on. This is a real run against this proj
 suite, asked to add one small feature, by a model that costs cents per run:
 
 ```console
-$ ninny verdict runs/dogfood-stamp/ab-dogfood60-1
+$ python3 -m ninny verdict runs/dogfood-stamp/ab-dogfood60-1
 {"bypass_detected": [[20, "ninny/artifacts.py"], [24, "ninny/agent.py"], [43, "ninny/agent.py"],
  [43, "ninny/artifacts.py"]], "exit": 1, "exit_status": "Submitted", "first_src_step": 20,
  "green_after_last_write": true, "order": "red-after-code", "red_step": 44, "steps": 49,
@@ -37,7 +37,7 @@ and four writes went round the tools instead of through them. Run the same comma
 tests went red first and it prints this instead:
 
 ```console
-$ ninny verdict runs/dogfood-stamp/ab-editfile2-1
+$ python3 -m ninny verdict runs/dogfood-stamp/ab-editfile2-1
 {"bypass_detected": [], "exit": 0, "exit_status": "Submitted", "first_src_step": 15,
  "green_after_last_write": true, "order": "red-first", "red_step": 14, "steps": 28,
  "suite_frozen_since_red": true, "verdict": "artifact", "reasons": []}
@@ -118,10 +118,10 @@ Ninny imports only the standard library, and that is not a slogan — the whole 
 with site-packages switched off:
 
 ```
-python3 -S -m unittest discover -s tests -t .    # 154 tests, OK
+python3 -S -m unittest discover -s tests -t .    # 407 tests, OK
 ```
 
-Run on **Python 3.11, 3.12, 3.13 and 3.14**, 154 tests green on each, with no code changes
+Run on **Python 3.11, 3.12, 3.13 and 3.14**, green on each, with no code changes
 between them. `requires-python = ">=3.11"` because `tomllib` is the one modern thing it uses.
 
 This is a deliberate reversal of the upstream design, for a measured reason: mini-swe-agent
@@ -157,7 +157,7 @@ python3 -m ninny verdict runs/roman/<arm>
 Step 2 prints a record; step 3 is the artifact's verdict and step 4 the handback's, and both are
 run by hand, per run. `--provider` may be omitted: it defaults to `local`, whose endpoint
 `python3 -m ninny doctor` prints. A real run of
-the shipped example task, `deepseek/deepseek-v4.1-flash`, sandboxed with bubblewrap, defaults
+the shipped example task, `tasks/roman`, on `deepseek/deepseek-v4.1-flash`, sandboxed with bubblewrap, defaults
 throughout (paths shortened; the record holds absolute ones):
 
 ```
@@ -504,8 +504,8 @@ any files at all.
 
 ### The format is not Python-shaped
 
-Ten tasks ship here — `roman`, `spans`, `dur`, `jsonptr`, `intset`, `nasm-sum`, `bits`,
-`roman-cli`, `cron`, `ninny-gate` — across five languages and six ways of running tests, each with
+Eleven tasks ship here — `roman`, `spans`, `dur`, `jsonptr`, `intset`, `nasm-sum`, `bits`,
+`roman-cli`, `cron`, `ninny-gate`, `dogfood-stamp` — across five languages and six ways of running tests, each with
 its oracle and its answer key (`fixed/`). They are **worked examples of the format**, not a benchmark: **a benchmark whose
 answer key is public is not a benchmark.** If you want to score models on one of them, keep its
 `oracle/` and `fixed/` out of your published tree — everything needed to grade lives there, and
@@ -821,8 +821,8 @@ Two things worth knowing before you trust a green:
 
 - **A fresh clone has no hooks armed.** `core.hooksPath` lives in `.git/config`, not in the
   tree, so a clone commits and pushes unguarded while looking armed. Arm it once per clone:
-  `git config core.hooksPath .githooks`. This clone is armed, so `push` runs the full gate;
-  publishing is a plain `git push`.
+  `git config core.hooksPath .githooks`. Then `push` runs the full gate; publishing is a plain
+  `git push`.
 - **A missing engine fails loudly**, not green: with no `kit-ci` on `PATH`, `scripts/gate.sh`
   exits 1 and says so.
 

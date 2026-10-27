@@ -20,7 +20,10 @@ python3 -m ninny doctor
   `http://127.0.0.1:8645/v1` and the API key in `NINNY_API_KEY`; `--base-url` and `--api-key`
   override both, and `--provider openai|openrouter|ollama|llamacpp` pick a preset whose key
   comes from that provider's own environment variable. `python3 -m ninny doctor` prints the
-  endpoint actually in use, so you never have to guess.
+  endpoint actually in use. **The model ids are whatever that endpoint serves** -- `curl -s
+  "$BASE/models"` lists them with their pricing, and `doctor` reports how many there are. There is
+  no `ninny models` command; a reader with only this clone would have to guess one without this
+  line, which is why it is a line.
 - **Bubblewrap, optional but recommended.** Scored runs should be sandboxed, so that the model
   cannot read the oracle that grades it. On most distributions `bwrap` is a package
   (`apt install bubblewrap`); without root, `apt-get download bubblewrap && dpkg -x bubblewrap_*.deb root`
@@ -30,7 +33,8 @@ python3 -m ninny doctor
   BWRAP=$(command -v bwrap || echo ./root/usr/bin/bwrap)
   ```
 
-  A run without a sandbox is still a run, but the number it produces is not attributable,
+  With the distribution package the binary is usually `/usr/bin/bwrap`; `command -v bwrap`
+  answers it either way. A run without a sandbox is still a run, but the number it produces is not attributable,
   because the answer was inside the tree the whole time. Ninny says so when it starts.
 
 ## The five commands
@@ -48,7 +52,14 @@ python3 -m ninny check --task tasks/roman --tree runs/roman/arm1/tree   # grade 
 run's own record and asks whether the delegate handed back something that can be applied and
 believed. `check` runs the task's oracle against the tree the arm produced. A patch can be
 real -- `verdict` 0 -- and still fail the oracle, or pass the oracle having never run the
-suite it was supposed to test. Run both.
+suite it was supposed to test. Run both, and read them together:
+
+| `verdict` | `check` | what it means |
+| --- | --- | --- |
+| 0 `artifact` | 0 `GATE PASSED` | a real patch that the oracle accepts -- the strongest reading available |
+| 0 `artifact` | non-zero | a patch that is evidence of a process, applied to a tree the oracle rejects |
+| 1 `unproven` | 0 | the right artifact from a process the record cannot vouch for (no red, no suite run) |
+| 2 `nothing` | any | nothing was handed back |
 
 ## Two doors
 

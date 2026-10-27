@@ -772,3 +772,16 @@ launch. Its unit test passed anyway, because the test's own `Namespace` was buil
 the fixture copied the bug. Fixing the code then made the *test* fail, which is the only reason the mistake
 became visible. Build the namespace by parsing a real command line with the real parser, or test the seam
 separately: a hand-built `Namespace` tests the helper and never the wiring.
+
+## Prose is not maintained by anything (2026-10-27)
+
+A delegate that had never seen this repository was given a fresh clone and asked to drive it. It
+succeeded, and then reported three numbers in the README that had quietly gone wrong: the suite's
+size (154 tests, now 407), the task count (ten, now eleven -- `dogfood-stamp` was missing from the
+list), and "this clone is armed", which contradicts the sentence before it (hooks live in
+`.git/config`, so a clone is never armed until someone arms it).
+
+None of the three was a lie when written. That is the point: a number in prose has no owner and no
+test, so it rots the moment the thing it describes grows. Prefer a claim that cannot rot ("the whole
+suite passes with site-packages switched off") or a command that prints the number. If a number must
+appear, the sentence naming it should also name the command that produced it.
