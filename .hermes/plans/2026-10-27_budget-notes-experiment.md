@@ -48,3 +48,63 @@ exit code; (4) steps; (5) cost. Recorded per arm from `result.json`, not from th
 - Two arms per condition is enough to see "nothing at all" versus "something" and is not enough to
   estimate a rate. If both `told` arms write, the honest claim is *it stopped the total loss*, not
   *it raises success by X*.
+
+---
+
+## RESULT — 2026-10-27, 13:43–14:30
+
+Scored from `result.json` **after each process exited**. (That matters: `result.json` is written
+incrementally, and a first read at 14:20 against a still-running arm showed `test_runs=[]` for an arm
+that had in fact run the suite at step 34. Read the record when the run is over, or read a snapshot.)
+
+| arm | exit_status | steps | writes | `told` | `test_runs` | verdict | cost | patch |
+|---|---|---|---|---|---|---|---|---|
+| `budget-base-1` | StepLimit | 40 | **0** | — (field absent) | `[]` | `no-write` | $0.1006 | **13 B, 0 files** |
+| `budget-base-2` | pending | | | | | | | |
+| `budget-told-1` | StepLimit | 40 | **4** | `[[21,'silence'],[35,'budget']]` | `[[34,1]]` | `red-first` | $0.0974 | **11,644 B, 3 files** |
+| `budget-told-2` | StepLimit | 40 | **4** | `[[21,'silence'],[35,'budget']]` | `[[33,1]]` | `red-first` | $0.1136 | **4,720 B, 3 files** |
+
+**Prediction, clause by clause.**
+1. *`writes` 0 and 0 in the baseline, > 0 in both `told` arms* — **HELD.** 0 vs 4 and 4.
+2. *At least one `told` arm reaches `Submitted`* — **FAILED.** Every arm in both conditions hit
+   `StepLimit`. The total loss stopped; the handback did not start.
+3. *Each note appears exactly once in `told`* — **HELD**, identically in both arms (`[[21,'silence'],
+   [35,'budget']]`), so the notes fire at the same point regardless of what the model does in between.
+4. *≤ $0.12 per arm* — **HELD** ($0.0974, $0.1136, $0.1006). But the estimate the ceiling was set from
+   ($0.0603 for 40 steps, from the October run) was wrong for this tree and model: ~$0.10 is the going
+   rate.
+
+**What the logs show, in order.**
+- `told-1`: note at 21 → a 5,487-byte test at **step 23** → ran the suite at 34 (`exit 1`, a real RED)
+  → `GREEN` at 35 → tried to hand back and was refused: *"your own tests are failing — the last
+  `run_tests` run exited non-zero… A handover on a red tree is not a result."* → kept working, wrote
+  source at 37 and edited the test at 38 → step limit.
+- `told-2`: note at 21 → test at **step 26** → suite at 33 (`exit 1`) → wrote source at 36, 40, and a
+  header at 37 → step limit. Never attempted a submit.
+- `base-1`: 40 steps of reading, no write, no test run, no submit, 13-byte empty patch.
+
+**Protections that fired, unprompted, in both `told` arms:** `told-1` had a write to `tools/probe3.cpp`
+refused by the protected-glob rule plus the test-first message; `told-2` had a write outside the tree
+(`/tmp/probe.cpp`) refused. `bypass_detected` is empty in all three.
+
+**What this supports.** One note — said once, at the halfway point, only because nothing had been
+written — converted a run that produced 13 bytes into runs that produced a failing test, a suite run,
+and 4.7 KB / 11.6 KB of patch, at the same step limit and the same cost. Both told arms wrote the test
+*first* and ran it, unprompted, which is the behaviour the whole harness exists to encourage.
+
+**What this does NOT support.**
+- Not a success rate: n=2 per condition, one brief, one repo, one model, one budget.
+- Not a handback: both told arms died at 40 steps, and `green_after_last_write` is `None` in both — they
+  went green *before* their last write, so their code is unproven. `red-first` is a claim about order,
+  not about being finished.
+- Not a correctness claim: a repository task has no oracle. Nobody has said those tests are right.
+- Not sufficiency. 40 steps is still too few for this brief; the honest reading is that the notes
+  stopped the total loss and the caller's dial (a budget sized to the brief) is the other half.
+
+**Confound, as pre-registered, and how it played out.** PROTEKT committed `acdeff4` after the original
+failing run, so these arms are not the original tree — and it did not weaken the comparison in the
+direction that matters: the baseline still produced 13 bytes and zero writes, and `budget-base-1`
+(steps 34–37) was observed running `git show <sha>:tests/test_shotgun.cpp` in git history to find a
+brief-named file absent from its staged tree. That is the pre-registered confound, seen directly — and
+it is the exact fact the new preflight now prints as `names N paths; … missing: …`.
+

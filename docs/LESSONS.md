@@ -756,3 +756,11 @@ future — not a switch you can flip back.
 **The generalisation: if publishing needs a ritual, the repo is tracking something it should not.**
 Force, filtering, and "remember to run the gate by hand" were all consequences of one directory
 tree being in the wrong place. The tell is a publish path that is not `git push`.
+
+## A record is written while the run is still going
+
+`result.json` is not written once, at the end. Scoring an arm that is still running reads a snapshot, and
+a snapshot can be empty where the finished record is not: a first pass over a run that had already called
+`run_tests` at step 34 showed `test_runs=[]`, and looked like the harness failing to observe a suite run it
+had in fact observed. Read the record after the process exits -- or read it twice and believe the second.
+Applies to any number taken from a run in flight, including `write_steps` and `told`.
