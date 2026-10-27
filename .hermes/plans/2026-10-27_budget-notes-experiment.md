@@ -264,3 +264,31 @@ table says so: the same notes on a borrowed, moving subject produced patches tha
 the suite it wrote passes with the suite that was already there (401 -> 404 tests). The evidence that made
 adoption reasonable is the record above, not the vendor of the patch -- which is the claim this project
 exists to make.
+
+## THE BATCH CLOSED — `budget-base-2` landed last, 2 against 2
+
+40 of 40 steps, 0 writes, `no-write`, 13 bytes: the same outcome as `budget-base-1`, on a tree that had moved
+further since. It cost **$0.2120** against $0.1006 for its twin, and the record shows why -- steps 37 and 38
+took 256 s and 206 s and emitted 31k and 23k output tokens. That is what contention with another session's
+runs looks like inside a record, and it is worth knowing that two arms given identical instructions can differ
+by 2x in cost for reasons that have nothing to do with the harness.
+
+It also shows the stale-brief problem from the far side. At steps 38-40 it ran `ls` and `git log` **in the
+live PROTEKT checkout**, which its sandbox binds read-only, reading the commit that had already implemented
+the brief. It never wrote, and the honest reading is that it found the work already done. That is the failure
+the preflight's missing-path line makes visible *before* the money is spent -- on a subject you control.
+
+**Final, all six arms.**
+
+    subject     arm            steps  writes  exit        verdict      cost      patch
+    PROTEKT     budget-base-1  40/40    0     StepLimit   no-write     $0.1006      13 B
+    (borrowed)  budget-base-2  40/40    0     StepLimit   no-write     $0.2120      13 B
+                budget-told-1  40/40    4     StepLimit   red-first    $0.0974  11,644 B
+                budget-told-2  40/40    4     StepLimit   red-first    $0.1136   4,720 B
+    NINNY       duration-1     41/60    8     SUBMITTED   red-first    $0.0573    see run
+    (owned)     duration-2     48/60    6     SUBMITTED   red-first    $0.0444    137 ins
+
+Clause 1 of the prediction -- baselines write nothing, told arms write -- held 2/2 against 2/2. Clause 2 -- a
+handback -- failed 0/4 on the borrowed subject and held 2/2 on the owned one, which is the cleanest statement
+of what the correction was worth. Total spend for the six arms: $0.6253, and the two that worked were the two
+cheapest.
