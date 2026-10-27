@@ -764,3 +764,11 @@ a snapshot can be empty where the finished record is not: a first pass over a ru
 `run_tests` at step 34 showed `test_runs=[]`, and looked like the harness failing to observe a suite run it
 had in fact observed. Read the record after the process exits -- or read it twice and believe the second.
 Applies to any number taken from a run in flight, including `write_steps` and `told`.
+
+## A fixture can spell an argument the way the code does, and then test nothing
+
+The preflight read `args.test_globs` while the flag was `--test-glob`, so every `ninny run --repo` died at
+launch. Its unit test passed anyway, because the test's own `Namespace` was built with `test_globs` too --
+the fixture copied the bug. Fixing the code then made the *test* fail, which is the only reason the mistake
+became visible. Build the namespace by parsing a real command line with the real parser, or test the seam
+separately: a hand-built `Namespace` tests the helper and never the wiring.

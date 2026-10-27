@@ -16,7 +16,7 @@ from ninny.config import repo_task
 
 
 def args_for(**over) -> argparse.Namespace:
-    base = dict(steps=40, timeout=None, tdd="request", test_globs=["tests/*"], repo="/tmp/repo")
+    base = dict(steps=40, timeout=None, tdd="request", test_glob=["tests/*"], repo="/tmp/repo")
     base.update(over)
     return argparse.Namespace(**base)
 
@@ -65,13 +65,13 @@ class ThePreflightStatesWhatIsAboutToBeSpent(unittest.TestCase):
 
     def test_enforce_without_a_test_glob_is_refused(self):
         _, refusal = preflight_lines(self.task, self.dir, "edit src/sim.cpp",
-                                     args_for(tdd="enforce", test_globs=[]))
+                                     args_for(tdd="enforce", test_glob=[]))
         self.assertIn("REFUSING", refusal)
         self.assertIn("--test-glob", refusal)
 
     def test_enforce_with_a_glob_is_allowed(self):
         _, refusal = preflight_lines(self.task, self.dir, "edit src/sim.cpp",
-                                     args_for(tdd="enforce", test_globs=["tests/*"]))
+                                     args_for(tdd="enforce", test_glob=["tests/*"]))
         self.assertEqual(refusal, "")
 
 

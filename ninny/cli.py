@@ -185,7 +185,7 @@ def preflight_lines(task, workdir: Path, prompt_text: str,
     else:
         lines.append("the brief names no file path at all -- no entry point to start from")
 
-    if args.tdd == "enforce" and not args.test_globs:
+    if args.tdd == "enforce" and not args.test_glob:
         return lines, (
             "REFUSING: --tdd enforce without --test-glob cannot be satisfied. enforce refuses a source "
             "write until a test has been seen failing, and with no test glob the only thing that can make "
