@@ -814,7 +814,7 @@ inferred, so a toolchain without a build step simply says nothing and gets nothi
 
 A delegate that had never seen this repository was given a fresh clone and asked to drive it. It
 succeeded, and then reported three numbers in the README that had quietly gone wrong: the suite's
-size (154 tests, now 407), the task count (ten, now eleven -- `dogfood-stamp` was missing from the
+size (154 tests then, 429 now, and it moved twice more while this file sat still), the task count (ten, now eleven -- `dogfood-stamp` was missing from the
 list), and "this clone is armed", which contradicts the sentence before it (hooks live in
 `.git/config`, so a clone is never armed until someone arms it).
 

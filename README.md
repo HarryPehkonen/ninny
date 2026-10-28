@@ -118,7 +118,7 @@ Ninny imports only the standard library, and that is not a slogan — the whole 
 with site-packages switched off:
 
 ```
-python3 -S -m unittest discover -s tests -t .    # 407 tests, OK
+python3 -S -m unittest discover -s tests -t .    # expect OK; the count grows, so trust OK, not a number
 ```
 
 Run on **Python 3.11, 3.12, 3.13 and 3.14**, green on each, with no code changes
