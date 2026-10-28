@@ -194,6 +194,10 @@ a sixth:
 - and, outside the run directory, a **transcript in the state directory** and one line in an
   index over every invocation
 
+An agent that wants these instructions in the form its own runtime loads -- triggers, the traps
+found the hard way, the measured tables -- reads `skill/SKILL.md`, which ships here with its three
+reference files.
+
 When a result is reported, the paths are named. `docs/DRIVING.md` is the full manual — the five
 commands, the limits, the brief, and the lines that look like failures and are not.
 
