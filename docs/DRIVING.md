@@ -190,6 +190,40 @@ the console line or the durable log; when the run is over, read the record.
   specific fact than "the tests were not run", and the record keeps the two apart:
   `writes=0` is the number to look at.
 
+## What this assumes
+
+Written down because a reader deserves to know where the edges are, and because three of these have
+already produced surprises.
+
+**A task run assumes nothing but a shell and Python.** The fixture is in the repository, the commands
+come from `task.toml`, and nothing touches git.
+
+**A repository run assumes git.** Staging is a `git worktree` at HEAD, so the path must be a git working
+tree with at least one commit and `git` must be on PATH. Nothing is ever committed and your branch is
+never moved, but your `.git` does gain a worktree registration, the patch is `git diff --cached` inside
+that disposable worktree, and `git add -A` runs there -- which respects `.gitignore`, so build residue
+stays out of the patch.
+
+Which means **worktrees accumulate**: every `--repo` run leaves one and nothing prunes them. `git -C
+<repo> worktree list` shows them, and `git -C <repo> worktree prune` is the cleanup once the arm's
+directory is gone. An arm's `tree/` is where its patch came from, so prune only what you have finished
+judging.
+
+**The live repository is bound read-only into the sandbox.** A worktree's `.git` is a FILE pointing at
+the main repository, so without that bind git inside the sandbox reports "not a git repository". The
+consequence is worth knowing: a sandboxed delegate can READ the live checkout. One arm used that to find
+its brief already implemented, in a commit its worktree did not have.
+
+**Both doors assume a POSIX shell.** Every declared command -- the acceptance command, the cheap check,
+the probe, the oracle -- is run through the shell (`shell=True`), with the working directory set to the
+tree. It must be a shell string.
+
+**A run assumes its tree is still there at the end.** If it has been pruned away the observation records
+exit 126 rather than failing, or quietly succeeding.
+
+**Nothing assumes a language.** The commands are declared, the exit-code contract is the only thing
+Ninny reads, and a toolchain with no cheap check declares none.
+
 ## Reproducing a number
 
 `spec_sha256` and `tree_sha256` in the record pin the exact inputs, and the oracle is

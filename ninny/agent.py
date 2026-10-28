@@ -257,14 +257,18 @@ class Agent:
 
         if not result.exit_status:
             result.exit_status = "StepLimit"
-            # The handback rule at the OTHER exit (post 33, harrisbook). The run is over, so this
-            # spends no tokens and changes nothing the model did; it buys a record that says whether
-            # the tree builds and what the suite answered, instead of a patch nobody can judge.
+
+        if result.exit_status != "Submitted":
+            # The handback rule at the other exits (post 33, harrisbook). Every way of stopping that
+            # is not a handback leaves a patch nobody can judge -- the step limit, a wall-clock kill,
+            # a run that never produced a well-formed action. The run is over, so this spends no
+            # tokens and changes nothing the model did; it buys a record that says whether the tree
+            # builds and what the suite answered, in the same exit-code contract as everything else.
             for _, kind, code, seconds in run_at_limit(
                     task_check_cmd(self.task), self.task.test_cmd, self.workdir,
                     max(120, self.task.test_timeout_s)):
                 state.record_limit_run(step, kind, code, seconds)
-                self.log(f"[step {step}] at the limit, {kind}: {code}  ({seconds}s)")
+                self.log(f"[step {step}] no handback, {kind}: {code}  ({seconds}s)")
 
         result.wall_time_s = time.time() - started
         self.policy.close_seal(state)
