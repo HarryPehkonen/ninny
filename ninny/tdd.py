@@ -342,7 +342,7 @@ def cheap_check_line(code: int, seconds: float) -> str:
     No compiler output, no guessed diagnosis, and therefore no language. The meaning of the number
     is in the prompt's exit-code table, the same table for every language there is.
     """
-    return f"check after your write: exit {code} ({seconds}s)"
+    return f"the harness ran the declared check: exit {code} ({seconds}s)"
 
 
 def run_at_limit(check_cmd: str | None, suite_cmd: str, workdir: Path,
