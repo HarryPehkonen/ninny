@@ -74,7 +74,7 @@ Every toolchain is described by answering the same four questions. That is the w
 | `about` | one line naming the toolchain; rendered into the file's header |
 | `note` | the task's own prose, kept verbatim in the header: the traps a schema cannot express |
 | `require` | a glob that must match at least one file, or there is nothing to run (exit 2) |
-| `build` | a detached build step; a non-zero exit is 2, never a red |
+| `build` | a detached build step; a non-zero exit is 2, never a red. It is also the cheap check the harness runs, on its own, if a run ends at the step limit |
 | `run` | the test command |
 | `build_fail` | a regex proving the suite did not compile -- the case a toolchain hides behind its ordinary "tests failed" code |
 | `sum` | a regex whose captured group is **summed** (cases that ran) |

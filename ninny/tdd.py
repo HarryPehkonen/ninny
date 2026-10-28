@@ -22,6 +22,8 @@ trajectory instead of quietly winning.
 
 from __future__ import annotations
 
+import subprocess
+import time
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -128,6 +130,10 @@ class TDDState:
     #: observation of the tree being handed back, so the harness took one and said so here.
     harness_runs: list[list[int]] = field(default_factory=list)
     suite_stale_at_submit: bool = False
+    #: What the HARNESS observed after the run was already over -- runs it made itself, because a
+    #: run that dies at the step limit leaves a patch nobody can judge: [step, kind, exit, seconds].
+    #: `kind` is "check" (the task's declared cheap check) or "suite" (its acceptance command).
+    limit_runs: list[list] = field(default_factory=list)
     refusals: list[list] = field(default_factory=list)
     bypass_detected: list[list] = field(default_factory=list)
     submit_refusals: int = 0
@@ -224,6 +230,16 @@ class TDDState:
             return "red-no-impl"
         return "red-first" if self.red_step < self.first_src_step else "red-after-code"
 
+    def record_limit_run(self, step: int, kind: str, exit_code: int, seconds: float) -> None:
+        """One observation made after the model had already stopped.
+
+        The handback rule runs the suite when a handback is stale; this is that rule at the other
+        exit. Recorded like `harness_runs`, so a reader can always tell whose step it was and never
+        mistakes a run the harness made for one the model chose.
+        """
+        self.limit_runs.append([step, kind, exit_code, round(seconds, 1)])
+
+
     def as_dict(self) -> dict:
         return {
             "mode": self.mode,
@@ -251,6 +267,7 @@ class TDDState:
             # like: None = never observed, True = seen green, False = seen failing.
             "green_after_last_write": self.green_after_last_write,
             "harness_runs": self.harness_runs,
+            "limit_runs": self.limit_runs,
             "refusals": self.refusals,
             "bypass_detected": self.bypass_detected,
             "submit_refusals": self.submit_refusals,
@@ -288,6 +305,38 @@ def snapshot(workdir: Path, globs: list[str]) -> dict[str, str]:
     return out
 
 
+def run_at_limit(check_cmd: str | None, suite_cmd: str, workdir: Path,
+                  timeout_s: int) -> list[list]:
+    """Run the declared commands in the tree the arm left behind, and time them.
+
+    Called after a run has already ended: it spends no tokens and changes nothing about the run. It
+    exists because of a measured failure -- an arm on a 126-translation-unit repository spent 40 of 40
+    steps, wrote 15 files, never ran the acceptance command once, and left a tree that did not compile.
+    Its record could say it had produced a patch and nothing else: not whether the tree built, not
+    whether the suite ran, not what either answered.
+
+    `check_cmd` is the declared cheap check (a task's `[runner] build`, or a repository run's
+    `--check-cmd`). It is None when nothing is declared, which for a toolchain with no build step is
+    the honest answer rather than a faked one. Both exit codes are kept as they are -- 0 ran and
+    passed, 1 ran and failed, 2/126/127 never ran -- so "did not compile" is never read as a red.
+    """
+    runs: list[list] = []
+    for kind, cmd in (("check", check_cmd), ("suite", suite_cmd)):
+        if not cmd:
+            continue
+        started = time.monotonic()
+        try:
+            completed = subprocess.run(cmd, shell=True, cwd=str(workdir), capture_output=True,
+                                       text=True, timeout=timeout_s)
+            code = completed.returncode
+        except subprocess.TimeoutExpired:
+            code = 124  # it ran and was cut off, which is not a red either
+        except OSError:
+            code = 126
+        runs.append([0, kind, code, round(time.monotonic() - started, 1)])
+    return runs
+
+
 def budget_note(step_limit: int, state: TDDState, step: int) -> tuple[str, str] | None:
     """The note the model should be TOLD now, or None. Told, not blocked.
 
@@ -307,12 +356,23 @@ def budget_note(step_limit: int, state: TDDState, step: int) -> tuple[str, str] 
             "deliverable -- the handback is a patch. Take the first file the task names, write the "
             "first failing test, and iterate from there."
         )
-    if "budget" not in kinds and step_limit - step < max(3, int(step_limit * 0.15)):
-        return "budget", (
-            f"{step_limit - step} of {step_limit} steps remain. Hand back what you have now: a patch "
-            "that is incomplete but runs is judged on its merits, while a run that ends at the step "
-            "limit is judged on nothing at all."
-        )
+    if step_limit - step < max(3, int(step_limit * 0.15)):
+        green = any(code == 0 for _, code in state.test_runs)
+        # The two notes stand on the same step, so they are alternatives rather than a sequence: the
+        # SPECIFIC one wins where it applies, and after either the other never follows it. (post 33)
+        if not green and "verify" not in kinds and "budget" not in kinds:
+            return "verify", (
+                f"{step_limit - step} of {step_limit} steps remain and nothing has gone green yet. "
+                "The handback is judged on the artifact: a patch that does not build, or whose suite "
+                "was never run, cannot be applied and cannot be believed. Run the acceptance command "
+                "now, and fix what it says before writing anything else."
+            )
+        if "budget" not in kinds and "verify" not in kinds:
+            return "budget", (
+                f"{step_limit - step} of {step_limit} steps remain. Hand back what you have now: a patch "
+                "that is incomplete but runs is judged on its merits, while a run that ends at the step "
+                "limit is judged on nothing at all."
+            )
     return None
 
 

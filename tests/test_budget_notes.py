@@ -47,14 +47,14 @@ class TheModelIsToldBeforeItDiesSilently(unittest.TestCase):
         state.write_steps.append([2, "src/protekt/sim/spec.hpp"])  # it has been working, so the
         self.assertIsNone(budget_note(40, state, 30))              # silence note is not in play
         kind, text = self.notice(40, 37, state)
-        self.assertEqual(kind, "budget")
+        self.assertEqual(kind, "verify")
         self.assertIn("steps remain", text)
 
     def test_both_notes_can_arrive_in_one_run(self):
         state = self.state()
         kind, _ = self.notice(40, 21, state)
         state.told.append([21, kind])
-        self.assertEqual(self.notice(40, 38, state)[0], "budget")
+        self.assertEqual(self.notice(40, 38, state)[0], "verify")
 
     def test_a_short_budget_still_gets_both_notes(self):
         """A 10-step run must not be so short that neither note can fire."""
@@ -62,7 +62,7 @@ class TheModelIsToldBeforeItDiesSilently(unittest.TestCase):
         kind, _ = self.notice(10, 6, state)
         self.assertEqual(kind, "silence")
         state.told.append([6, kind])
-        self.assertEqual(self.notice(10, 9, state)[0], "budget")
+        self.assertEqual(self.notice(10, 9, state)[0], "verify")
 
 
 if __name__ == "__main__":

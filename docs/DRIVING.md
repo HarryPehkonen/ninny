@@ -76,6 +76,11 @@ python3 -m ninny run --repo ~/src/myrepo \
     --sandbox bwrap --bwrap-path "$BWRAP" --name myrepo-1
 ```
 
+`--check-cmd` declares a cheap check for a repository run -- a build, a compile -- which the harness
+runs, along with `--test-cmd`, if the run ends at the step limit. On a C++ project an incremental build
+costs seconds against minutes for a full gate, which is what makes it worth declaring. A task declares
+the same thing as `[runner] build`.
+
 Staging is a `git worktree` at HEAD, so your checkout is untouched and the run is isolated; the
 main repository is bound into the sandbox read-only so that git works inside. `--test-cmd` is
 required and never guessed, and `--prompt`, `--prompt-file` (or `--prompt "one line"`) supplies
@@ -153,6 +158,11 @@ Everything is under `runs/<subject>/<arm>/`:
 - `result.json` -- the record's machine-readable front matter, written INCREMENTALLY while the
   run is still going.
 - `oracle.log` -- written by `check`, beside the tree it graded.
+- `limit_runs` in the record -- what the harness ran *after* a run died at the step limit:
+  `[step, kind, exit, seconds]`, with `kind` either `check` (the declared cheap check) or `suite`
+  (the acceptance command). A run that ends at the limit produced a patch nobody can judge, so the
+  record says whether the tree builds and what the suite answered, in the same exit-code contract as
+  everything else. Nothing about the run changes; it is already over.
 - `tree/` -- the arm's working copy, left in place so the patch can be applied and the work
   inspected.
 - plus a durable transcript and one appended line in the index at
@@ -172,6 +182,10 @@ the console line or the durable log; when the run is over, read the record.
 - **`refused: write_file: tests/test_thing.py`** under `--tdd enforce` -- the gate doing its job.
   Source writes are refused until a red has been observed; write the failing test first and the
   path opens. The refusal text says which rule fired.
+- **`at the limit, check: 0` / `at the limit, suite: 1`** -- not failures, an observation: the run
+  ended at the step limit, so the harness ran the declared cheap check and the acceptance command in
+  the tree the arm left behind and recorded both exit codes. `check` 0 with `suite` 1 means the tree
+  builds and its tests fail, which is a different and much more useful fact than "nothing back".
 - **`no-write`** in a record -- the run produced nothing at all. That is a weaker and more
   specific fact than "the tests were not run", and the record keeps the two apart:
   `writes=0` is the number to look at.

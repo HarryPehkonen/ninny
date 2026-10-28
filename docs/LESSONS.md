@@ -773,6 +773,25 @@ the fixture copied the bug. Fixing the code then made the *test* fail, which is 
 became visible. Build the namespace by parsing a real command line with the real parser, or test the seam
 separately: a hand-built `Namespace` tests the helper and never the wiring.
 
+## The step limit was the one exit with no observation (2026-10-27)
+
+The handback rule runs the suite itself when a model hands back a tree it never tested. The OTHER exit
+had no such rule. An arm on a 126-translation-unit repository spent 40 of 40 steps, wrote 15 files,
+never ran the acceptance command once and left a tree that did not compile -- a deleted `struct Coord {`
+and a call site the signature change had not reached. Its record could say it had produced a patch and
+nothing else: not whether the tree built, not whether the suite ran, not what either answered.
+
+The rule is now at both exits. At `StepLimit` the harness runs the task's declared cheap check (its
+`[runner] build`, or a repository run's `--check-cmd`) and its acceptance command, and the record keeps
+both exit codes with their durations. Measured on a two-step run: `limit_runs` = `[[2,'check',0,0.0],
+[2,'suite',1,0.0]]` -- the tree builds, the suite ran and failed. That is a different fact from
+"nothing back", which is all the record could say before.
+
+The cheap check is declared, never inferred: a Python task declares no build step and that absence is
+honest rather than faked. And the numbers that make it worth declaring came from the same report -- an
+incremental build costs 4 s against 120 s for the full gate, so the signal was already sitting there,
+paid for, for every edit the run made.
+
 ## Prose is not maintained by anything (2026-10-27)
 
 A delegate that had never seen this repository was given a fresh clone and asked to drive it. It

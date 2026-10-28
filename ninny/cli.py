@@ -258,6 +258,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         if args.repo
         else load_task(_task_path(args.task))
     )
+    if args.repo and getattr(args, "check_cmd", None):
+        task.check_cmd = args.check_cmd
     base_url, api_key, wire = resolve_endpoint(args)
     logs.register_secret(api_key)  # the process holding the key writes the log
     pricing = Pricing(base_url, api_key, price_file=args.price_file, fetch=not args.no_price_fetch)
@@ -914,6 +916,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--steps", type=int, help="step limit (default: the task's)")
     run.add_argument("--wall-time", type=int, default=0, help="seconds; 0 = no limit")
     run.add_argument("--timeout", type=int, help="per bash action, seconds")
+    run.add_argument("--check-cmd", help="a cheap check --repo runs at the step limit, e.g. a build; "
+                                         "a task declares its own as [runner] build")
     run.add_argument("--test-timeout", type=int,
                      help="seconds for --repo's own suite (default 600); a task declares its own in "
                           "task.toml")

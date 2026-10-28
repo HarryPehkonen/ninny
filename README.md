@@ -327,6 +327,13 @@ python3 -m ninny run --task tasks/roman --tdd enforce --tdd-prompt request   # b
 Both are recorded (`run.tdd_mode`, `run.tdd_prompt_mode`), so an arm can be identified from
 its own trajectory instead of from a note somebody wrote down.
 
+The last note is chosen rather than fixed. At the end of the budget, if nothing has gone green yet,
+the model is told the SPECIFIC thing: *run the acceptance command, because a patch that does not build
+or whose suite was never run cannot be applied and cannot be believed.* Only when a suite has already
+gone green does it get the generic hand-back warning instead. Whichever applies, the other never follows
+it -- two notes on the same step is one note too many. The kind is recorded in `told`, so a run that was
+told to verify can never read like one that was not.
+
 ### What the model is told about its own budget
 
 The phase news intervenes when a *rule* is broken. Nothing in the loop used to intervene when a *budget* was

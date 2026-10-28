@@ -236,6 +236,24 @@ def render(config: dict) -> str:
     return script
 
 
+def task_check_cmd(task) -> str | None:
+    """The declared cheap check for this task, or None when nothing is declared.
+
+    A cheap check is not a smaller suite: it is the step that has to work before the suite can mean
+    anything -- a build, a compile, a parse. Measured on a 126-translation-unit repository, an
+    incremental build after one source write costs 4 s against 120 s for the acceptance command, and
+    the preflight had already paid to warm the build directory before the arm's first step. The
+    signal was sitting there unread, for every edit the arm made.
+
+    Declared, never inferred: a task says `[runner] build`, a repository run says `--check-cmd`. A
+    toolchain with no such step declares nothing, and that absence is honest rather than faked.
+    """
+    explicit = getattr(task, "check_cmd", None)
+    if explicit:
+        return explicit
+    return (config_for(task.meta) or {}).get("build")
+
+
 def config_for(task_meta: dict) -> dict | None:
     """The `[runner]` table of a loaded task, or None when the task brings its own script."""
     table = task_meta.get("runner")

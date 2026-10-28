@@ -20,7 +20,8 @@ from ninny import SUBMIT_SENTINEL, UPSTREAM, UPSTREAM_URL, __version__
 from ninny.actions import TOOLS, Action, parse_reply, validate
 from ninny.artifacts import tree_digest
 from ninny.prompt import SYSTEM_TEMPLATE, format_error_message, render_instance
-from ninny.tdd import PHASE_LABELS, budget_note
+from ninny.runner import task_check_cmd
+from ninny.tdd import PHASE_LABELS, budget_note, run_at_limit
 
 
 @dataclass
@@ -256,6 +257,14 @@ class Agent:
 
         if not result.exit_status:
             result.exit_status = "StepLimit"
+            # The handback rule at the OTHER exit (post 33, harrisbook). The run is over, so this
+            # spends no tokens and changes nothing the model did; it buys a record that says whether
+            # the tree builds and what the suite answered, instead of a patch nobody can judge.
+            for _, kind, code, seconds in run_at_limit(
+                    task_check_cmd(self.task), self.task.test_cmd, self.workdir,
+                    max(120, self.task.test_timeout_s)):
+                state.record_limit_run(step, kind, code, seconds)
+                self.log(f"[step {step}] at the limit, {kind}: {code}  ({seconds}s)")
 
         result.wall_time_s = time.time() - started
         self.policy.close_seal(state)
