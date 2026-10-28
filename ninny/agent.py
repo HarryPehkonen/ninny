@@ -17,11 +17,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ninny import SUBMIT_SENTINEL, UPSTREAM, UPSTREAM_URL, __version__
-from ninny.actions import TOOLS, Action, parse_reply, validate
+from ninny.actions import TOOLS, Action, parse_reply, validate, WRITE_ACTIONS
 from ninny.artifacts import tree_digest
 from ninny.prompt import SYSTEM_TEMPLATE, format_error_message, render_instance
 from ninny.runner import task_check_cmd
-from ninny.tdd import PHASE_LABELS, budget_note, run_at_limit
+from ninny.tdd import (CHEAP_CHECK_TIMEOUT, PHASE_LABELS, budget_note, cheap_check_line,
+                       run_at_limit, run_one)
 
 
 @dataclass
@@ -236,10 +237,29 @@ class Agent:
                 self.policy.observe(action, observation, state, step)
                 self.policy.observe_tree(state, step)
                 self._enforce_seal(state)
+
+                # The declared cheap check, after a write that landed, without being asked for.
+                # Nobody spends a step and their own tokens on a four-second build when the
+                # acceptance command costs two minutes: an arm on a 126-translation-unit repository
+                # wrote 15 files, never ran its suite, and left a tree that did not compile, which
+                # its record could not report until the run was already over. The signal was there
+                # after every edit. This costs no step and no tokens, and reports nothing but an
+                # exit code -- reading a toolchain's output is where any language stops being any.
+                check_line = ""
+                if (action.name in WRITE_ACTIONS or suspect) and observation.ok:
+                    check_cmd = task_check_cmd(self.task)
+                    if check_cmd:
+                        code, seconds = run_one(check_cmd, self.workdir, CHEAP_CHECK_TIMEOUT)
+                        state.checks.append([step, code, seconds])
+                        check_line = cheap_check_line(code, seconds)
+                        self.log(f"[step {step}] the declared check, after the write -> "
+                                 f"exit {code} ({seconds}s)")
                 # What the model is told and what the record says it was told are the same
                 # string: the phase note is prepended to the observation itself, because a
                 # note in the harness's own log is a note the model never reads.
                 told = observation.render()
+                if check_line:
+                    told = f"{check_line}\n{told}"
                 note = self.policy.note_for(action, observation, state)
                 if note:
                     told = f"{note}\n{told}"

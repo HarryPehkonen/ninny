@@ -334,6 +334,19 @@ gone green does it get the generic hand-back warning instead. Whichever applies,
 it -- two notes on the same step is one note too many. The kind is recorded in `told`, so a run that was
 told to verify can never read like one that was not.
 
+### What the harness pays for, because the model won't
+
+The model pays a step and its tokens to learn what a compiler says, so it doesn't ask. The harness pays
+seconds and none: after every write that lands, it runs the task's declared cheap check (`[runner]
+build`, or a repository run's `--check-cmd`) and puts one line in the delegate's own observation --
+`check after your write: exit 0 (0.0s)` -- and the same numbers in the record's `checks`. Nothing is
+blocked, no step is spent, and it is never a red: it is what the tree was doing, one line at a time,
+which is the thing a run about to die at its step limit never learns.
+
+Measured as an A/B, same task, same budget: **3 writes produced 3 checks with the wiring, and 0 without.**
+On a trivial `make` the check costs 0.0 s; the datum that justifies it is from a 126-translation-unit
+repository, where an incremental build is 4 s against 120 s for the acceptance command.
+
 ### What the model is told about its own budget
 
 The phase news intervenes when a *rule* is broken. Nothing in the loop used to intervene when a *budget* was

@@ -134,6 +134,10 @@ class TDDState:
     #: run that dies at the step limit leaves a patch nobody can judge: [step, kind, exit, seconds].
     #: `kind` is "check" (the task's declared cheap check) or "suite" (its acceptance command).
     limit_runs: list[list] = field(default_factory=list)
+
+    # The declared cheap check, run after every write that landed: [[step, exit_code, seconds]].
+    # The same numbers the delegate was shown, so the record and the model never disagree.
+    checks: list[list] = field(default_factory=list)
     refusals: list[list] = field(default_factory=list)
     bypass_detected: list[list] = field(default_factory=list)
     submit_refusals: int = 0
@@ -267,6 +271,7 @@ class TDDState:
             # like: None = never observed, True = seen green, False = seen failing.
             "green_after_last_write": self.green_after_last_write,
             "harness_runs": self.harness_runs,
+            "checks": self.checks,
             "limit_runs": self.limit_runs,
             "refusals": self.refusals,
             "bypass_detected": self.bypass_detected,
@@ -305,6 +310,41 @@ def snapshot(workdir: Path, globs: list[str]) -> dict[str, str]:
     return out
 
 
+#: How long the declared cheap check may take after a write. Small on purpose: the point is that it
+#: costs seconds, not the minutes an acceptance command costs. Measured on a 126-translation-unit
+#: repository: 4 s incremental against 120 s for the full gate. A check that needs longer is
+#: mis-declared, and the record says so -- 124, cut off.
+CHEAP_CHECK_TIMEOUT = 60
+
+
+def run_one(cmd: str, workdir: Path, timeout_s: int) -> tuple[int, float]:
+    """One declared command, timed. Its exit code is kept as it is.
+
+    0 ran and passed, 1 ran and failed, 124 was cut off, 126 never started, 127 not found. Every
+    caller here reports these numbers rather than judging them, which is the whole reason Ninny can
+    run a suite it has never seen in a language it does not know.
+    """
+    started = time.monotonic()
+    try:
+        completed = subprocess.run(cmd, shell=True, cwd=str(workdir), capture_output=True,
+                                   text=True, timeout=timeout_s)
+        code = completed.returncode
+    except subprocess.TimeoutExpired:
+        code = 124
+    except OSError:
+        code = 126
+    return code, round(time.monotonic() - started, 1)
+
+
+def cheap_check_line(code: int, seconds: float) -> str:
+    """One terse line for the delegate: the exit code and the time, nothing else, ever.
+
+    No compiler output, no guessed diagnosis, and therefore no language. The meaning of the number
+    is in the prompt's exit-code table, the same table for every language there is.
+    """
+    return f"check after your write: exit {code} ({seconds}s)"
+
+
 def run_at_limit(check_cmd: str | None, suite_cmd: str, workdir: Path,
                   timeout_s: int) -> list[list]:
     """Run the declared commands in the tree the arm left behind, and time them.
@@ -324,16 +364,8 @@ def run_at_limit(check_cmd: str | None, suite_cmd: str, workdir: Path,
     for kind, cmd in (("check", check_cmd), ("suite", suite_cmd)):
         if not cmd:
             continue
-        started = time.monotonic()
-        try:
-            completed = subprocess.run(cmd, shell=True, cwd=str(workdir), capture_output=True,
-                                       text=True, timeout=timeout_s)
-            code = completed.returncode
-        except subprocess.TimeoutExpired:
-            code = 124  # it ran and was cut off, which is not a red either
-        except OSError:
-            code = 126
-        runs.append([0, kind, code, round(time.monotonic() - started, 1)])
+        code, seconds = run_one(cmd, workdir, timeout_s)
+        runs.append([0, kind, code, seconds])
     return runs
 
 

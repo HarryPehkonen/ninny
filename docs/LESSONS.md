@@ -792,6 +792,24 @@ honest rather than faked. And the numbers that make it worth declaring came from
 incremental build costs 4 s against 120 s for the full gate, so the signal was already sitting there,
 paid for, for every edit the run made.
 
+## The signal was there after every edit (2026-10-27)
+
+A delegate pays a step and its own tokens to learn that a build broke -- so it does not ask. The arm on
+a 126-translation-unit repository made 15 writes over 40 steps and never ran anything that would have
+told it the tree had stopped compiling; the record only learned it at the exit, which was too late to be
+useful to the run. Meanwhile an incremental build cost 4 s against 120 s for the full gate, and the
+preflight had already warmed the build directory.
+
+So the harness pays it instead: after every write that lands, it runs the declared cheap check and puts
+ONE line in the delegate's own observation -- `check after your write: exit 0 (0.0s)`. No step is spent,
+no token is spent, nothing is blocked, and it is not a red. Measured as an A/B on the same task with the
+same budget: 3 writes produced 3 checks with the wiring and 0 without. On a trivial `make` the check
+costs 0.0 s; the number that justifies the feature is the one from the large repository.
+
+Two rules kept it language-agnostic. It reports an exit code and NOTHING else -- no compiler output, no
+matched error text, no guessed diagnosis -- and it is declared (`[runner] build`, or `--check-cmd`), never
+inferred, so a toolchain without a build step simply says nothing and gets nothing.
+
 ## Prose is not maintained by anything (2026-10-27)
 
 A delegate that had never seen this repository was given a fresh clone and asked to drive it. It

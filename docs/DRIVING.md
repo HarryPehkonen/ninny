@@ -158,6 +158,9 @@ Everything is under `runs/<subject>/<arm>/`:
 - `result.json` -- the record's machine-readable front matter, written INCREMENTALLY while the
   run is still going.
 - `oracle.log` -- written by `check`, beside the tree it graded.
+- `checks` in the record -- the declared cheap check, run on the harness's own initiative after every
+  write that landed: `[step, exit, seconds]`. The same line the delegate was shown, so the record and
+  the model can never disagree about what the tree was doing.
 - `limit_runs` in the record -- what the harness ran *after* a run died at the step limit:
   `[step, kind, exit, seconds]`, with `kind` either `check` (the declared cheap check) or `suite`
   (the acceptance command). A run that ends at the limit produced a patch nobody can judge, so the
@@ -220,6 +223,13 @@ tree. It must be a shell string.
 
 **A run assumes its tree is still there at the end.** If it has been pruned away the observation records
 exit 126 rather than failing, or quietly succeeding.
+
+**The cheap check runs after every write, and reports nothing but an exit code.** A delegate pays a
+step and its tokens to learn what a compiler says; the harness pays seconds and none, which measured on
+a 126-translation-unit repository is 4 s against the 120 s an acceptance command costs. Four of the
+tasks shipped here declare a `build`, so they get the signal for free. There is no output parsing, no
+error-message matching and no language in it: the meaning of the number is the exit-code table, the same
+table for every toolchain.
 
 **Nothing assumes a language.** The commands are declared, the exit-code contract is the only thing
 Ninny reads, and a toolchain with no cheap check declares none.
