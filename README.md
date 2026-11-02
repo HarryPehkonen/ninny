@@ -428,6 +428,8 @@ Every run ends with a verdict:
 - **`red-first`** — wrote a test, ran it, saw it fail, then implemented.
 - **`red-after-code`** — implemented, and only later produced a failing test.
 - **`no-red`** — wrote tests but never saw one fail.
+- **`unmeasured`** — no `--test-glob` declared which paths are tests, so no write could be classified;
+  a repository run that wrote its test file but never declared globs is this, not `no-tests`.
 - **`no-tests`** — never wrote a test at all.
 
 `run_tests` is a **first-class action**, which is what makes a RED observation a harness
