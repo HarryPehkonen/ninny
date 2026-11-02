@@ -75,6 +75,13 @@ class Task:
     #: file. Declared per task so the standard is stated rather than inferred, and refused by
     #: the loader if it says anything else.
     oracle_gate: str = "implementation"
+    #: The declared cheap check: the fastest command that can fail for the reason the run is graded
+    #: on. A task declares it as `[runner] build`; a repository run passes `--check-cmd`.
+    #:
+    #: Declared, never inferred -- a toolchain with no such step says nothing. Measured 2026-11-02:
+    #: a repository run declared its check as the delegate's own unit tests while the acceptance
+    #: command was a different command, and the check went green while the artifact regressed.
+    check_cmd: str | None = None
     meta: dict = field(default_factory=dict)
 
     def is_test_path(self, rel: str) -> bool:
@@ -112,6 +119,7 @@ def repo_task(
     step_limit: int = 60,
     timeout_s: int = 120,
     test_timeout_s: int = 600,
+    check_cmd: str | None = None,
 ) -> Task:
     """A `Task` for a real repository: no fixture, no oracle, and no seal.
 
@@ -160,6 +168,7 @@ def repo_task(
         step_limit=step_limit,
         timeout_s=timeout_s,
         test_timeout_s=test_timeout_s,
+        check_cmd=check_cmd,
         protected_globs=[],
         sandbox_binds=[str(root)],
         require_test_file=False,

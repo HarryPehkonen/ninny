@@ -810,6 +810,22 @@ Two rules kept it language-agnostic. It reports an exit code and NOTHING else --
 matched error text, no guessed diagnosis -- and it is declared (`[runner] build`, or `--check-cmd`), never
 inferred, so a toolchain without a build step simply says nothing and gets nothing.
 
+## A check that cannot see the failure is a green light (2026-11-02)
+
+A repository run against a KiCad board declared its cheap check as the delegate's own unit tests (0.3 s)
+while its acceptance criterion was a different command, 1.1 s -- `kicad-cli pcb drc`, red at HEAD with
+three unconnected items. Its record afterwards: the check fired on all nine writes, was `exit 1` from step
+12 to step 33 for a reason the delegate had invented, then `exit 0` at step 39 while the board was worse
+than it started (11 of 16 nets against 14). The signal inverted, and the acceptance command was never run
+by anyone until the harness ran it at the limit, forty steps later.
+
+Three changes came out of it, in the order they were worth doing: the preflight times the declared check
+as well as the suite and says when the two are different commands (declaring a check that cannot fail for
+the reason the run is graded on is the mistake it makes visible); `check` grew a repository door, because
+nothing independently validated a repository artifact and the run's own closing hint named a command Ninny
+refuses; and the observation note now fires at half the budget, not only at the end, since "go and get the
+ground truth" is early work and "hand back what you have" is the only instruction that belongs at the end.
+
 ## Prose is not maintained by anything (2026-10-27)
 
 A delegate that had never seen this repository was given a fresh clone and asked to drive it. It

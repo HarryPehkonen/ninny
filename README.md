@@ -347,6 +347,12 @@ build`, or a repository run's `--check-cmd`) and puts one line in the delegate's
 blocked, no step is spent, and it is never a red: it is what the tree was doing, one line at a time,
 which is the thing a run about to die at its step limit never learns.
 
+Declare as that check the fastest command that can FAIL for the reason the run is graded on -- not the
+delegate's own unit tests, unless those are what the run is graded on. A repository run declared its check
+as its unit tests (0.3 s) while the acceptance command was a different command (1.1 s): the check went red
+for eight writes for a reason the delegate had invented, then green while the artifact regressed. The
+preflight times both and says when they differ.
+
 Measured as an A/B, same task, same budget: **3 writes produced 3 checks with the wiring, and 0 without.**
 On a trivial `make` the check costs 0.0 s; the datum that justifies it is from a 126-translation-unit
 repository, where an incremental build is 4 s against 120 s for the acceptance command.

@@ -30,11 +30,18 @@ class TheModelIsToldBeforeItDiesSilently(unittest.TestCase):
         self.assertEqual(kind, "silence")
         self.assertIn("written nothing", text)
 
-    def test_a_write_silences_the_silence_note(self):
-        """A model that is working -- even on a test file -- is not nagged."""
+    def test_a_write_silences_the_silence_note_but_not_the_others(self):
+        """A model that has written is not told it has written NOTHING -- that note is done with.
+
+        It is still told to observe what it wrote, and that is the shape post 37 measured: a run that
+        wrote a test file at step 12, never ran anything across forty steps, and was asked to verify at
+        step 35 of 40, five steps from the cliff.
+        """
         state = self.state()
         state.write_steps.append([4, "tests/own/test_x.py"])
-        self.assertIsNone(budget_note(40, state, 21))
+        found = budget_note(40, state, 21)
+        self.assertIsNotNone(found)
+        self.assertNotEqual(found[0], "silence")
 
     def test_each_note_is_said_once(self):
         state = self.state()
@@ -44,9 +51,9 @@ class TheModelIsToldBeforeItDiesSilently(unittest.TestCase):
 
     def test_the_budget_note_arrives_near_the_end(self):
         state = self.state()
-        state.write_steps.append([2, "src/protekt/sim/spec.hpp"])  # it has been working, so the
-        self.assertIsNone(budget_note(40, state, 30))              # silence note is not in play
-        kind, text = self.notice(40, 37, state)
+        state.write_steps.append([2, "src/protekt/sim/spec.hpp"])  # it has been working
+        state.test_runs.append([5, 1])                             # and has observed something, so
+        kind, text = self.notice(40, 37, state)                    # the halfway note is not in play
         self.assertEqual(kind, "verify")
         self.assertIn("steps remain", text)
 

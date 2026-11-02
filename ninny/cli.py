@@ -21,6 +21,7 @@ import os
 import re
 import shutil
 import subprocess
+import shlex
 import sys
 import tempfile
 import time
@@ -30,11 +31,12 @@ from ninny import UPSTREAM, UPSTREAM_URL, __version__, logs, verdict
 from ninny.agent import Agent
 from ninny.artifacts import write_diff
 from ninny.config import ConfigError, bash_timeout_for, load_task, repo_task
+from ninny.runner import task_check_cmd
 from ninny.env import Environment
 from ninny.model import PROVIDERS, ModelClient, ModelError
 from ninny.pricing import Pricing
 from ninny.sandbox import SandboxError, build_sandbox, child_env, find_bwrap
-from ninny.tdd import MODES, TDDPolicy, phases_line
+from ninny.tdd import MODES, TDDPolicy, phases_line, run_one
 
 
 # ------------------------------------------------------------------------ run
@@ -204,6 +206,18 @@ def preflight_lines(task, workdir: Path, prompt_text: str,
         f"suite `{task.test_cmd}` {duration}; it gets {task.test_timeout_s}s, a single bash action "
         f"{bash_timeout_for(task.test_timeout_s, args.timeout)}s",
     ]
+    # The declared cheap check, timed the same way and shown on the same screen as the suite.
+    # Measured 2026-11-02: a repository run declared its check as the delegate's own unit tests
+    # (0.3 s) while the acceptance command was a different command (1.1 s); the check went red for
+    # eight writes for a reason the delegate had invented, then green while the artifact regressed,
+    # and the criterion was never run by anyone until the harness ran it at the limit. Both numbers
+    # were one line apart the whole time and the caller had been shown only one of them.
+    check_cmd = task_check_cmd(task)
+    if check_cmd:
+        lines.append(f"the declared check `{check_cmd}` {_suite_duration(check_cmd, tree, 120)}")
+        if check_cmd.strip() != task.test_cmd.strip():
+            lines.append("that is a different command from the acceptance command above: a green "
+                         "check is not the acceptance criterion passing")
 
     # Which paths the brief names, and whether they are there to be read. A brief that names nothing
     # that exists has no entry point to start from, which is a fact worth stating out loud.
@@ -254,12 +268,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     task = (
         repo_task(Path(args.repo), repo_prompt(args), args.test_cmd or "",
                   test_globs=args.test_glob, step_limit=args.steps or 60,
-                  test_timeout_s=args.test_timeout or 600)
+                  test_timeout_s=args.test_timeout or 600,
+                  check_cmd=getattr(args, "check_cmd", None))
         if args.repo
         else load_task(_task_path(args.task))
     )
-    if args.repo and getattr(args, "check_cmd", None):
-        task.check_cmd = args.check_cmd
     base_url, api_key, wire = resolve_endpoint(args)
     logs.register_secret(api_key)  # the process holding the key writes the log
     pricing = Pricing(base_url, api_key, price_file=args.price_file, fetch=not args.no_price_fetch)
@@ -372,9 +385,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"  patch:      {run_dir / 'diff.patch'}")
     print(f"  log:        {_log_path()}")
     print()
-    print(f"next, BY HAND: ninny check --task {task.root} --tree {workdir}")
     if args.repo:
+        print(f"next, BY HAND: ninny check --repo {task.root} --test-cmd "
+              f"{shlex.quote(args.test_cmd or '')} --tree {workdir}")
         print(f"next, BY HAND: ninny verdict {run_dir}")
+    else:
+        print(f"next, BY HAND: ninny check --task {task.root} --tree {workdir}")
     _record(
         args,
         task=task.name,
@@ -491,12 +507,44 @@ def _run_own_suite(task, work: Path) -> tuple[int, str]:
 
 
 # ---------------------------------------------------------------------- check
+def _check_repo(args: argparse.Namespace, tree: Path) -> int:
+    """`check` on the repository door: run the declared command in the tree and report the contract.
+
+    A task's `check` runs an ORACLE -- a program that already knows what correct means, staged beside
+    the tree with the fixture hidden. A repository has none, so what can be checked is the one thing the
+    run was graded on: whether the acceptance command still says what it said. It is worth having,
+    because in repository mode `verdict` grades only the handback, and until this existed the acceptance
+    evidence was whatever the harness had recorded about itself.
+
+    Same contract as everywhere else: 0 ran and passed, 1 ran and failed, and 2/126/127 (never started)
+    or 124 (cut off) are "nothing was observed" -- never a failing test.
+    """
+    if not args.test_cmd:
+        print("ninny: check --repo needs --test-cmd, the command the run was graded on",
+              file=sys.stderr)
+        return 2
+    print(f"ninny check --repo: {args.test_cmd}   (cwd={tree})")
+    code, seconds = run_one(args.test_cmd, tree, max(600, int(args.test_timeout or 600)))
+    print()
+    if code == 0:
+        print(f"GATE PASSED -- the acceptance command ran and passed ({seconds}s)")
+        return 0
+    if code == 1:
+        print(f"GATE FAILED -- the acceptance command ran and failed ({seconds}s)")
+        return 1
+    why = {124: "was cut off", 126: "never started", 127: "was not found"}.get(code, "never ran")
+    print(f"NOTHING OBSERVED -- exit {code}: the acceptance command {why} ({seconds}s)")
+    return 2
+
+
 def cmd_check(args: argparse.Namespace) -> int:
-    task = load_task(_task_path(args.task))
     tree = Path(args.tree).expanduser().resolve()
     if not tree.is_dir():
         print(f"ninny: {tree} is not a directory", file=sys.stderr)
         return 2
+    if getattr(args, "repo", None):
+        return _check_repo(args, tree)
+    task = load_task(_task_path(args.task))
     if not task.oracle_cmd:
         print(f"ninny: task {task.name} declares no oracle_cmd", file=sys.stderr)
         return 2
@@ -945,6 +993,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     check = sub.add_parser("check", help="run the task's oracle on a submission, outside the tree")
     check.add_argument("--task", help="task directory (contains task.toml); default ./.ninny")
+    check.add_argument("--repo", help="a repository run's door: no oracle, just the command it was "
+                                      "graded on (needs --test-cmd)")
+    check.add_argument("--test-cmd", help="with --repo: the acceptance command to re-run in the tree")
+    check.add_argument("--test-timeout", type=int, help="with --repo: seconds for that command (600)")
     check.add_argument("--tree", required=True, help="the submission to judge")
     check.add_argument("--out", help="where to stage the check (default: $TMPDIR/ninny-checks/<task>)")
     check.set_defaults(func=cmd_check)

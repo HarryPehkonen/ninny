@@ -76,6 +76,13 @@ python3 -m ninny run --repo ~/src/myrepo \
     --sandbox bwrap --bwrap-path "$BWRAP" --name myrepo-1
 ```
 
+**Declare as the cheap check the fastest command that can FAIL for the reason the run is graded on.**
+Measured 2026-11-02: a repository run declared its own unit tests as the check (0.3 s) while its
+acceptance command was a different command (1.1 s). The check went red for eight writes for a reason the
+delegate had invented, then green while the artifact regressed -- and the criterion was never run by
+anyone until the harness ran it at the limit. The preflight now times both and says when they differ,
+because both numbers existed one line apart the whole time.
+
 `--check-cmd` declares a cheap check for a repository run -- a build, a compile -- which the harness
 runs, along with `--test-cmd`, if the run ends at the step limit. On a C++ project an incremental build
 costs seconds against minutes for a full gate, which is what makes it worth declaring. A task declares
@@ -233,6 +240,14 @@ table for every toolchain.
 
 **Nothing assumes a language.** The commands are declared, the exit-code contract is the only thing
 Ninny reads, and a toolchain with no cheap check declares none.
+
+## `check` works on both doors
+
+`check --task <task> --tree <tree>` runs a task's oracle. A repository has no oracle, so
+`check --repo <path> --test-cmd "<cmd>" --tree <tree>` re-runs the command the run was graded on, in the
+tree it left behind, and reports the same contract: `GATE PASSED`, `GATE FAILED`, or `NOTHING OBSERVED`
+with exit 2. It is the only independent validation a repository artifact gets -- `verdict` grades the
+handback, and the acceptance evidence is otherwise whatever the harness recorded about itself.
 
 ## Reproducing a number
 

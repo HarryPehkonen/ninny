@@ -388,6 +388,20 @@ def budget_note(step_limit: int, state: TDDState, step: int) -> tuple[str, str] 
             "deliverable -- the handback is a patch. Take the first file the task names, write the "
             "first failing test, and iterate from there."
         )
+    # Its mirror, and the same reasoning. A run that has written something and never observed
+    # anything is exploring without feedback -- post 37 measured exactly that: nine writes, no
+    # acceptance command run in forty steps, and a note to go and run it arriving at step 35 of 40,
+    # where it could no longer be obeyed. "Get the ground truth" is early work; "hand back what you
+    # have" is the only instruction that belongs at the end.
+    if (not state.wrote_nothing and not state.test_runs
+            and "verify" not in kinds and step > step_limit * 0.5):
+        return "verify", (
+            f"Half of your {step_limit} steps are gone and nothing has been observed yet: you have "
+            "written, and neither a test nor the acceptance command has run. The run is judged on the "
+            "artifact, and an artifact nobody has observed is a guess. Run the acceptance command now, "
+            "while there are still steps left to act on what it says."
+        )
+
     if step_limit - step < max(3, int(step_limit * 0.15)):
         green = any(code == 0 for _, code in state.test_runs)
         # The two notes stand on the same step, so they are alternatives rather than a sequence: the
