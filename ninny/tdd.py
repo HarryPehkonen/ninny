@@ -790,6 +790,13 @@ class TDDPolicy:
             state.last_src_step = step
         if self.mode == "enforce" and state.phase == "test":
             for path in changed:
+                # A bypass is a SOURCE write made while the gate was refusing source writes. With
+                # `src_globs = ["**"]` every changed file appears here, so `is_test_path` is the only
+                # thing separating a test write -- which is what the mode asks for -- from a bypass.
+                # Without it a delegate that wrote its own test file was recorded as having cheated
+                # (measured: NameGenerator, arm ng-utf8-2, step 11, whose write was its test file).
+                if self.task.is_test_path(path):
+                    continue
                 entry = [step, path]
                 if entry not in state.bypass_detected:
                     state.bypass_detected.append(entry)

@@ -39,6 +39,32 @@ right and never have observed a red.
 
 ## Lessons — the instrument (all of these were bugs in the harness, not the model)
 
+**A task you wrote must be proven passable, and proven discriminating, before it grades anyone.** A
+repository run (NameGenerator) was failed by its own acceptance command: applying the delegate's fix to a
+fresh copy and re-running produced byte-identical failures, `CHECKS: 83 run, 40 failed`, at HEAD and with
+the fix applied. Three separate authoring faults, all in the task rather than the delegate:
+
+  * the acceptance asserted an outcome the generator's own fallback masks, so it could not distinguish a
+    correct implementation from the broken one;
+  * it drove a strategy (`component`) that does not pass through the function the brief pointed at, so the
+    fix could not have changed its answer even in principle;
+  * the brief forbade changing the fallback, while the acceptance required it -- a self-contradictory task.
+
+**A broken task and a broken delegate look identical from the outside.** Both produce a failing acceptance
+command and a record that says the work did not pass. Nothing in the harness could tell them apart, and the
+only way this one was identified was by doing the delegate's work by hand. For a benchmark task the answer
+exists -- `verify-task` and the oracle gate prove solvability. For a repository there is no equivalent, and
+the caller is one skimming mistake away from measuring their own typo. **The discipline, until there is a
+feature: write the acceptance command, then apply the fix you expect to a copy and watch it go green, then
+watch it go red again at HEAD. Run it on this repository too -- `check --repo --tree <reference>` works on
+any tree, which is the whole point of it being a door rather than a button.**
+
+**Declaring `--test-glob` turns on enforcement, not just classification.** `default_tdd_for` returns
+`enforce` for a repository once test globs are declared, which is documented and printed in the preflight,
+and still surprised its author: the flag was added to get honest labels and delivered a gate, one refusal,
+and a run that spent its last five steps hunting git history for an answer key. A flag that changes two
+things should be reached for knowing both.
+
 **A label the harness has not earned is worse than a gap.** The verdict word was fixed to `unmeasured`
 first, and the label beside it went unnoticed until a live repository run: the record said
 `first_src_step: 12` for step 12, whose write was `tests/test_char_length.py`. A repository task sets
