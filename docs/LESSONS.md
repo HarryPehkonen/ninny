@@ -39,6 +39,31 @@ right and never have observed a red.
 
 ## Lessons — the instrument (all of these were bugs in the harness, not the model)
 
+**A label the harness has not earned is worse than a gap.** The verdict word was fixed to `unmeasured`
+first, and the label beside it went unnoticed until a live repository run: the record said
+`first_src_step: 12` for step 12, whose write was `tests/test_char_length.py`. A repository task sets
+`src_globs = ["**"]` (every path is the work) and declares no test globs, so `is_test_path` is False for
+everything and the first write becomes "the first source write" whatever it was. Both labels are now
+withheld when nothing declared what a test is. A gap invites a question; a wrong label answers it wrongly,
+and this one was sitting next to the word that had just been fixed to say "I cannot tell".
+
+**`**` in a matcher is not `**` in a path-walker.** Found in the same log, one function away. `snapshot`
+strips a trailing `/**` to find its root, so a bare `"**"` -- exactly what `repo_task` puts in `src_globs`
+-- resolved to a directory literally named `**`, which never exists, so the walk returned nothing. The tree
+reconciliation, whose whole purpose is catching writes the action log cannot see (a shell heredoc, a
+`sed`), was therefore dead for every repository run. Two spellings of the same idea in two places, and
+only one of them was ever exercised.
+
+**An exit code is not a measurement of what was visible.** A run's log line read
+`find /home/harri/.hermes … 2>/dev/null | head -50; echo …; ls -la /home/harri/.hermes/ … -> exit 0`, and it
+was read as proof that the sandbox exposed the caller's home directory -- a security finding reported
+before it was tested. Reproducing the same namespace showed the opposite: `/home/harri` contains exactly
+one entry, the path component bwrap creates to reach the run's own tree; the `.env` and `.gitconfig` are
+unreadable; `ls` on the home fails. The `0` came from a `;` chain and a pipe: a suppressed error, a
+pipeline's last command status, and a chain's last command status all read as success. **To learn what a
+sandbox hid, run the probe and look at its output -- never infer it from the status of a command nobody
+read the output of.**
+
 1. **The exit-code contract is the load-bearing idea.** Every runner bug found was a
    violation of it: a build error reported as RED, a zero-case suite reported as PASS, a
    "no tests found" reported as PASS. Fix the contract, and the measurements become

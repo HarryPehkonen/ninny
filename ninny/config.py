@@ -130,8 +130,9 @@ def repo_task(
     - `oracle_dir = None`: there is no external corpus to stage or hide. The repository's own
       gate is the acceptance evidence, and what gets graded is the handback, not a score.
     - `test_globs` comes from `--test-glob` and is empty by default. Which files are tests is a
-      property of the repository; a glob we guessed would classify the wrong files with
-      confidence, so the record says `no-tests` until the caller says otherwise.
+      property of the repository; a glob we guessed would classify the wrong files with confidence,
+      so the record says `unmeasured` and labels nothing a test or a source until the caller says
+      otherwise. It said `no-tests` until a live run showed the label was a claim, not a fact.
     - `src_globs = ["**"]`: every path is the work. A write is only refused while a red has not
       been seen, and `is_test_path` is consulted first, so a declared test path stays writable
       before the red -- in a repository the tests are the model's to extend.

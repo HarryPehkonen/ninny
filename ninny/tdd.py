@@ -263,6 +263,9 @@ class TDDState:
             #: Which rule decided the red. A record can then be read without its task, and a
             #: repository run is not graded against a benchmark's claim about its suite.
             "require_test_file": self.require_test_file,
+            #: Whether the run was told which paths are tests. False means no label of "test" or
+            #: "source" in this record was earned, and `unmeasured` is the verdict that says so.
+            "globs_declared": self.globs_declared,
             "test_files": self.test_files,
             "first_test_step": self.first_test_step,
             "first_src_step": self.first_src_step,
@@ -304,7 +307,11 @@ def snapshot(workdir: Path, globs: list[str]) -> dict[str, str]:
     """
     out: dict[str, str] = {}
     for pattern in globs:
-        base = pattern[:-3] if pattern.endswith("/**") else pattern
+        # A bare "**" means the whole tree. A repository declares exactly that (`src_globs` is ["**"]
+        # in `repo_task`), and stripping a suffix it does not have left the root as a directory
+        # literally named "**" -- which never exists, so the walk found no files and the tree
+        # reconciliation could not see the writes it exists to see.
+        base = "." if pattern == "**" else (pattern[:-3] if pattern.endswith("/**") else pattern)
         root = workdir / base
         paths = [root] if root.is_file() else (sorted(root.rglob("*")) if root.is_dir() else [])
         for path in paths:
@@ -674,7 +681,11 @@ class TDDPolicy:
                 if state.first_test_step is None:
                     state.first_test_step = step
             elif self.task.is_src_path(rel) and observation.ok:
-                if state.first_src_step is None:
+                # With no test globs nothing can be classified: `is_test_path` is False for every
+                # path, so this branch would label the first write -- test file or not -- as the
+                # first SOURCE write. Measured on a repository run whose step-12 write was
+                # tests/test_char_length.py and whose record said first_src_step: 12 (post 35).
+                if state.first_src_step is None and state.globs_declared:
                     state.first_src_step = step
                 state.last_src_step = step
                 if state.red_ok:
@@ -769,7 +780,10 @@ class TDDPolicy:
         current = snapshot(self.workdir, self.task.src_globs)
         changed = [path for path, signature in current.items() if self._baseline_src.get(path) != signature]
         if changed:
-            if state.first_src_step is None:
+            # Gated for the same reason as `observe`: a changed file is not a SOURCE file when
+            # nothing declared what a source is. `last_src_step` stays ungated -- it is a timing
+            # fact about the last write, and it is true whatever that write turned out to be.
+            if state.first_src_step is None and state.globs_declared:
                 state.first_src_step = step
             # The tree is the ground truth for the observation gap as well: a source change
             # through a route the action log cannot see still makes the last run stale.
