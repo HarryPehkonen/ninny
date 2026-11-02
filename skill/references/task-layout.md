@@ -8,8 +8,8 @@ tasks/<name>/  task.toml  SPEC.md  tree/  oracle/
 ```
 
 - **The oracle must live outside `tree/`** — `load_task` refuses it otherwise, and
-  `ninny check` refuses to score unless the agent could not see it (escape hatch:
-  `--allow-oracle-visible`, which makes the number unattributable).
+  `ninny check` refuses to score unless the agent could not see it, and there is no escape
+  hatch -- a number produced with the answer key in reach is not worth having.
 - `test_globs` = the agent's own tests; `src_globs` = source (writes here are what
   `enforce` gates); `protected_globs` = the instrument (`tools/**`).
 - `test_cmd` must FAIL when there are no tests (`run_own_tests.sh` does this on

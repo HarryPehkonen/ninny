@@ -79,8 +79,9 @@ timestamp  subcommand  task  model  exit_status  steps  cost_usd  verdict  run_d
 
 Both streams are teed and the failure paths are wrapped, so a run that dies still leaves
 the log and the line; a registered API key is scrubbed on the way to disk; a log
-directory that cannot be written is a warning, never a dead run. `--no-log` on every
-subcommand turns it off and must then create nothing at all.
+directory that cannot be written is a warning, never a dead run. There is no way to turn it
+off -- a record you can silence is not a record, and the runs that went wrong are the ones
+you most need to read.
 
 Modes: `--tdd` chooses what the GATE does — `enforce` (refuses source writes until a RED
 test is seen), `request` (record only, the default), `reverse` (code first, tests
@@ -189,10 +190,11 @@ ninny verdict runs/myrepo/myrepo-1      # 0 artifact | 1 unproven, with reasons 
   status/diff/log work and add/commit fail cleanly, which is the delegate's business anyway.
 - The patch is `git diff --cached` in the worktree against the commit it was staged at, with
   `git add -A` first so a new file is included -- NEVER a comparison against the live tree.
-- **Every limit is a dial, and each has its own.** `--steps` (60 by default in repo mode), `--wall-time`
-  (default **0, which is no limit at all**), `--timeout` (one bash action; floors at the declared suite
-  timeout, so a slow gate is not killed while it is producing evidence), `--request-timeout` (one model call,
-  600 s), `--test-timeout` (the repository's own suite, 600 s).
+- **Every limit is a dial, and each has its own.** `--steps` (60 by default in repo mode), `--timeout`
+  (one bash action; floors at the declared suite timeout, so a slow gate is not killed while it is
+  producing evidence), `--test-timeout` (the repository's own suite, 600 s). Those are the three that
+  govern a run. The model call keeps its own default and is not tunable: a harness that shops for
+  sampling parameters is measuring the model, which is the one thing it is not allowed to do.
 - **The declared cheap check is a THIRD job for `[runner] build`** -- and for a repository run's
   `--check-cmd`. The harness runs it after every write that lands and puts ONE line in the delegate's own
   observation (`the harness ran the declared check: exit 0 (0.0s)`), spending no step and no token, blocking

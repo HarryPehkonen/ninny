@@ -21,7 +21,7 @@
   makes every verdict a pass. `verify-task` catches it in plain words ("it passes on the
   tree the agent starts from, so it grades nothing").
 - **A run must not hand back a red tree**: if the last `run_tests` exited non-zero the
-  submit is refused once, in EVERY `--tdd` mode (`--allow-red-submit` opts out). It is a
+  submit is refused once, in EVERY `--tdd` mode, with no opt-out. It is a
   quality guarantee, not a test-first rule, so it is not conditional on the mode.
 - **The write gate can be routed around — trust the TREE, not the action log.** Both live
   bypasses smuggled a source change through an intermediary: a script written into the

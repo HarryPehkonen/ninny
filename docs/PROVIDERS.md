@@ -6,7 +6,6 @@ Ninny talks to endpoints through a **wire**: a protocol shape, not a vendor.
 --provider local|openai|openrouter|ollama|llamacpp
 --base-url http://host:port/v1     # anything OpenAI-compatible; overrides --provider
 --wire chat|completions            # protocol shape
---api-key ...                      # else the provider's environment variable
 ```
 
 A provider preset is only three facts, in `ninny/model.py`:
@@ -22,7 +21,7 @@ So connecting an OpenAI-compatible server needs no code at all:
 
 ```bash
 ninny run --task tasks/roman --model my-model \
-    --base-url http://127.0.0.1:8080/v1 --api-key sk-whatever
+    --base-url http://127.0.0.1:8080/v1          # the key comes from NINNY_API_KEY
 ```
 
 ## The two wires that ship

@@ -17,7 +17,7 @@ python3 -m ninny doctor
   there is no second step. If you prefer a command on your PATH, `uvx --from . ninny …` or
   `uv tool install git+https://github.com/HarryPehkonen/ninny` both work against the same code.
 - **A model.** Any OpenAI-compatible endpoint. `--provider` defaults to `local`, which means
-  `http://127.0.0.1:8645/v1` and the API key in `NINNY_API_KEY`; `--base-url` and `--api-key`
+  `http://127.0.0.1:8645/v1` and the API key in `NINNY_API_KEY`; `--base-url`
   override both, and `--provider openai|openrouter|ollama|llamacpp` pick a preset whose key
   comes from that provider's own environment variable. `python3 -m ninny doctor` prints the
   endpoint actually in use. **The model ids are whatever that endpoint serves** -- `curl -s
@@ -118,10 +118,8 @@ the answer key, and the task's own runner must report a planted failing test as 
 | flag | what it caps | default |
 | --- | --- | --- |
 | `--steps N` | model turns | the task's, or 60 in repo mode |
-| `--wall-time N` | total elapsed seconds | **0, i.e. no limit** |
 | `--timeout N` | one bash action | `max(120, the declared suite timeout)` |
 | `--test-timeout N` | the repo's own suite | 600 |
-| `--request-timeout N` | one model call | 600 |
 | `--cost-limit` | not enforced, recorded only | -- |
 | `--tdd off\|request\|enforce\|reverse` | what the gate does, not what the model reads | `request` |
 
@@ -176,7 +174,7 @@ Everything is under `runs/<subject>/<arm>/`:
 - `tree/` -- the arm's working copy, left in place so the patch can be applied and the work
   inspected.
 - plus a durable transcript and one appended line in the index at
-  `$XDG_STATE_HOME/ninny/logs/history.tsv` (default `~/.local/state/ninny/logs`, `--no-log` to
+  `$XDG_STATE_HOME/ninny/logs/history.tsv` (default `~/.local/state/ninny/logs`; there is no way to
   turn both off, in which case nothing is created at all).
 
 **Read `result.json` only after the process has exited.** Because it is written as the run goes,

@@ -1,6 +1,9 @@
 """Every door `main()` walks through has to be open on every command.
 
-`main()` reads `args.no_log` before it dispatches anything -- the flag is spelled once, in a loop
+`main()` writes the transcript and the index line for every invocation -- there is no switch, and a
+subparser that quietly gained one would put back the ability to silence the record. This walks every
+command instead: `--no-log` used to be spelled once in a loop, and `verdict` shipped without joining it
+once, so every unit test passed while the real command died in `main()` with
 over the subparsers, so a harness that writes into your home directory always has an off switch.
 `verdict` was registered after that loop, so `ninny verdict <run>` parsed fine, passed every unit
 test that called `cmd_verdict` directly, and then died inside `main()` with
@@ -31,16 +34,19 @@ def argv_for(command: str) -> list[str]:
 
 
 class EveryCommandAcceptsTheSharedFlags(unittest.TestCase):
-    def test_no_log_is_accepted_everywhere(self):
+    def test_no_command_can_silence_the_record(self):
+        """A record you can switch off is not a record.
+
+        The flag used to be spelled once, in a loop over every subparser, and the failure mode it
+        guarded was real: `verdict` shipped outside that loop, every unit test passed, and the real
+        command died in `main()` with `AttributeError: 'Namespace' object has no attribute 'no_log'`.
+        There is no flag now, and this walks every command so one cannot come back unnoticed.
+        """
         parser = build_parser()
         for command in COMMANDS:
             with self.subTest(command=command):
-                try:
-                    args = parser.parse_args(argv_for(command) + ["--no-log"])
-                except SystemExit:
-                    self.fail(f"`ninny {command}` does not accept --no-log, so main() dies "
-                              f"before it dispatches anything")
-                self.assertTrue(getattr(args, "no_log", False), command)
+                with self.assertRaises(SystemExit):
+                    parser.parse_args(argv_for(command) + ["--no-log"])
 
     def test_every_command_has_a_function_to_dispatch_to(self):
         parser = build_parser()

@@ -275,12 +275,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
     base_url, api_key, wire = resolve_endpoint(args)
     logs.register_secret(api_key)  # the process holding the key writes the log
-    pricing = Pricing(base_url, api_key, price_file=args.price_file, fetch=not args.no_price_fetch)
+    pricing = Pricing(base_url, api_key)
     steps = args.steps or task.step_limit
 
     out_root = (Path(args.out).expanduser() if args.out else Path("runs")).resolve() / task.name
     name = args.name or _default_name(args.model, args.tdd)
-    run_dir = archive_if_exists(out_root / name, args.force)
+    run_dir = archive_if_exists(out_root / name, False)
     workdir = run_dir / "tree"
     base_sha = ""
     if args.repo:
@@ -291,7 +291,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     sandbox = build_sandbox(
         args.sandbox,
         args.bwrap_path,
-        share_net=args.sandbox_net,
+        share_net=False,   # the sandbox has no network; that is the point of it
         binds=task.sandbox_binds,
     )
     ok, note = sandbox.plan(workdir)
@@ -312,7 +312,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             return 2
     if task.oracle_dir is not None:
         visible = sandbox.hides(task.oracle_dir, workdir)
-        if visible is False and not args.allow_oracle_visible:
+        if visible is False:
             print(
                 f"ninny: the oracle at {task.oracle_dir} IS readable from the working tree. The "
                 "agent could write its tests from the answer key, which makes the test-first "
@@ -328,7 +328,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         timeout=bash_timeout_for(task.test_timeout_s, args.timeout),
         test_cmd=task.test_cmd,
         test_timeout=task.test_timeout_s,
-        allow_outside=args.allow_outside,
+        allow_outside=False,
     )
     if args.repo:
         lines, refusal = preflight_lines(task, workdir, repo_prompt(args), args)
@@ -337,15 +337,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         if refusal:
             print(f"preflight: {refusal}")
             return 2
-    policy = TDDPolicy(args.tdd, task, workdir, require_green=not args.allow_red_submit)
+    policy = TDDPolicy(args.tdd, task, workdir, require_green=True)
     client = ModelClient(
         model=args.model,
         base_url=base_url,
         api_key=api_key,
         wire=wire,
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
-        timeout=args.request_timeout,
     )
 
     print(f"  task     {task.name}  ({task.root})")
@@ -365,7 +362,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         run_dir=run_dir,
         pricing=pricing,
         step_limit=steps,
-        wall_time_limit=args.wall_time,
+        wall_time_limit=0,
         sandbox_note=sandbox.plan(workdir)[1],
         prompt_mode=resolve_prompt_mode(args.tdd, args.tdd_prompt),
         log=(lambda _line: None) if args.quiet else print,
@@ -866,7 +863,7 @@ def archive_if_exists(run_dir: Path, force: bool) -> Path:
     if not run_dir.exists():
         return run_dir
     if not force:
-        raise ConfigError(f"{run_dir} already exists; use --force to archive it and rerun")
+        raise ConfigError(f"{run_dir} already exists; pick another --name (nothing is deleted)")
     index = 1
     while (run_dir.parent / f"{run_dir.name}.rep{index}").exists():
         index += 1
@@ -950,9 +947,9 @@ def build_parser() -> argparse.ArgumentParser:
                           "and enforces the handback instead")
     run.add_argument("--model", required=True, help="model id as the endpoint spells it")
     run.add_argument("--provider", help=f"one of {', '.join(sorted(PROVIDERS))}")
+    run.add_argument("--wire", choices=["chat", "completions"], default="chat",
+                     help="protocol shape, for an endpoint that is not OpenAI-shaped")
     run.add_argument("--base-url", help="any OpenAI-compatible endpoint; overrides --provider")
-    run.add_argument("--api-key", help="defaults to the provider's environment variable")
-    run.add_argument("--wire", choices=["chat", "completions"], help="protocol shape")
     run.add_argument("--tdd", choices=list(MODES), default=None,
                      help="what the gate does. request: measure the order, refuse nothing "
                           "(default for a task) | enforce: also refuse src writes until a RED is "
@@ -960,34 +957,20 @@ def build_parser() -> argparse.ArgumentParser:
                           "| reverse: code first, tests required before submit | off")
     run.add_argument("--sandbox", choices=["none", "bwrap"], default="none")
     run.add_argument("--bwrap-path", help="path to a bwrap binary, if it is not on PATH")
-    run.add_argument("--sandbox-net", action="store_true", help="let the sandbox reach the network")
     run.add_argument("--steps", type=int, help="step limit (default: the task's)")
-    run.add_argument("--wall-time", type=int, default=0, help="seconds; 0 = no limit")
+    run.add_argument("--tdd-prompt", choices=MODES, default="",
+                     help="which Testing block the model READS. Default: told -- the enforced "
+                          "wording for --tdd request, and --tdd itself otherwise. Setting it "
+                          "apart from --tdd is how 'told' and 'blocked' are separated when you "
+                          "are measuring instead of working")
     run.add_argument("--timeout", type=int, help="per bash action, seconds")
     run.add_argument("--check-cmd", help="a cheap check --repo runs at the step limit, e.g. a build; "
                                          "a task declares its own as [runner] build")
     run.add_argument("--test-timeout", type=int,
                      help="seconds for --repo's own suite (default 600); a task declares its own in "
                           "task.toml")
-    run.add_argument("--request-timeout", type=int, default=600, help="per model call, seconds")
-    run.add_argument("--temperature", type=float)
-    run.add_argument("--max-tokens", type=int)
     run.add_argument("--out", help="output root (default: ./runs)")
     run.add_argument("--name", help="arm name (default: <model>-<tdd mode>)")
-    run.add_argument("--price-file", help="JSON prices, overriding the endpoint's")
-    run.add_argument("--no-price-fetch", action="store_true", help="do not ask /models for prices")
-    run.add_argument("--allow-outside", action="store_true",
-                     help="let the file tools touch paths outside the working tree")
-    run.add_argument("--allow-oracle-visible", action="store_true",
-                     help="run even though the agent can read the oracle (result is unattributable)")
-    run.add_argument("--tdd-prompt", choices=MODES, default="",
-                     help="which Testing block the model READS. Default: told -- the "
-                          "enforced wording for --tdd request, and --tdd itself otherwise. "
-                          "Setting it apart from --tdd is how 'told' and 'blocked' are "
-                          "separated when you are measuring instead of working")
-    run.add_argument("--allow-red-submit", action="store_true",
-                     help="let a run submit while its own tests are still failing")
-    run.add_argument("--force", action="store_true", help="archive an existing run and rerun")
     run.add_argument("--quiet", action="store_true")
     run.set_defaults(func=cmd_run)
 
@@ -1031,13 +1014,6 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--out")
     doctor.set_defaults(func=cmd_doctor)
 
-    # One flag on every subcommand, spelled once. A harness that writes into your home
-    # directory had better have an off switch. `build_parser`'s own test walks the commands and
-    # refuses a subparser that never joined this loop -- `verdict` shipped without it once and
-    # every unit test passed while the real command died in `main()`.
-    for subparser in (run, check, verdict_parser, verify, doctor, runner):
-        subparser.add_argument("--no-log", action="store_true",
-                               help="no transcript log and no history line for this invocation")
     return parser
 
 
@@ -1049,7 +1025,7 @@ def main(argv: list[str] | None = None) -> int:
     runs that went right, which is exactly backwards.
     """
     args = build_parser().parse_args(argv)
-    with logs.session(args.command, _log_name(args), enabled=not args.no_log) as session_log:
+    with logs.session(args.command, _log_name(args), enabled=True) as session_log:
         try:
             code = args.func(args)
         except (ConfigError, SandboxError, ModelError) as exc:
@@ -1058,9 +1034,10 @@ def main(argv: list[str] | None = None) -> int:
         except KeyboardInterrupt:
             print("ninny: interrupted", file=sys.stderr)
             code = 130
-    if not args.no_log:
-        fields = dict(getattr(args, "_record", None) or {})
-        fields.setdefault("exit_status", code)
-        fields["log_file"] = session_log.path
-        logs.record(args.command, **fields)
+    # Always. A record you can switch off is not a record, and the whole point of the index is
+    # that "what has Ninny been doing?" is answerable for the runs that went wrong too.
+    fields = dict(getattr(args, "_record", None) or {})
+    fields.setdefault("exit_status", code)
+    fields["log_file"] = session_log.path
+    logs.record(args.command, **fields)
     return code

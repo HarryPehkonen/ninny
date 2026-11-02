@@ -239,8 +239,9 @@ and no steps because a `check` uses neither.
 A **registered API key is scrubbed on the way to disk**: the process writing the log is the
 process holding the key, and its reader may paste the file into a context window. A log
 directory that cannot be written is a warning, never a dead run — a harness that refuses to
-work because it cannot keep a diary is worse than one that keeps no diary. `--no-log` turns
-the whole thing off, on every subcommand.
+work because it cannot keep a diary is worse than one that keeps no diary. There is no switch
+for it: a record you can silence is not evidence, and the runs that went wrong are the ones you
+most want to read.
 
 ## `verify-task`: a task is not trusted until it has been proved
 
@@ -466,9 +467,9 @@ after the gate had missed them.
 Test-first asks whether a test was seen to fail before the code was written. This asks a
 different question: is the thing green? If the last `run_tests` the arm ran exited
 non-zero, the submit is refused once, with the reason, in **every** mode. It is not a
-test-first rule, so it is not conditional on the test-first mode. `--allow-red-submit`
-turns it off — the switch between *get the best code out of this model* and *measure what
-this model does when nobody stops it*.
+test-first rule, so it is not conditional on the test-first mode. Nothing turns it off: if you
+want to know what a model does when nobody stops it, that is a different question and a
+different tool, and answering it here would cost you every other number this one produces.
 
 ## The five actions
 
@@ -687,9 +688,9 @@ the guard reads:
 | `none` | `None` — "cannot tell" | the run proceeds under the `NO SANDBOX` banner |
 
 So `--sandbox none` does not refuse: `None` is not `False`, and the guard only refuses a
-sandbox that positively reports the oracle as readable (that is when you need
-`--allow-oracle-visible`). If you want the answer key to be unreachable rather than merely
-unattributed, sandbox the run.
+sandbox that positively reports the oracle as readable, and a run in that state is refused.
+There is no opt-out: a number produced with the answer key in reach is unattributable, so
+Ninny declines to produce it. If you want the answer key unreachable as well, sandbox the run.
 
 A runnable instance of exactly this layout ships in
 [`examples/existing-project/`](examples/existing-project/): an inline `test_cmd`, a
@@ -763,13 +764,12 @@ python3 -m ninny run ... --sandbox bwrap --bwrap-path ./root/usr/bin/bwrap
 A sandbox that hides the compiler would score every model as unable to build, so each task
 declares `preflight` commands that must work **inside** the sandbox. If they fail, Ninny
 refuses to score the run rather than blame the model. Ninny also refuses to score a run in
-which the agent can read the oracle, unless you pass `--allow-oracle-visible` and accept an
-unattributable result.
+which the agent can read the oracle, and declines to score until the tree is fixed.
 
 ## Honest cost
 
-Cost is computed from token usage against **the endpoint's own published prices** (`/models`),
-or a file you supply with `--price-file`. If the price is unknown, Ninny reports the cost as
+Cost is computed from token usage against **the endpoint's own published prices** (`/models`).
+If the price is unknown, Ninny reports the cost as
 unknown rather than guessing. A bundled price table that silently disagrees with your
 provider is how an evaluation publishes numbers that are wrong by 2–5×.
 

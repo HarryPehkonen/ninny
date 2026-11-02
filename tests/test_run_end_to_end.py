@@ -75,7 +75,8 @@ class IndexLineTests(unittest.TestCase):
                 "--task", str(REPO / "tasks" / "roman"),
                 "--model", "stub/model",
                 "--sandbox", "none",
-                "--allow-oracle-visible",  # `none` cannot hide the oracle; the run says so
+                # (no --allow-oracle-visible: it is gone, and a run that can read the oracle
+                # must say so and stop instead of grading itself)
                 "--out", str(self.root / "runs"),
                 "--name", f"stub-arm-{self.arms}",
                 "--steps", "4",
@@ -130,11 +131,3 @@ class IndexLineTests(unittest.TestCase):
         self.assertEqual(fields["verdict"], record["result"]["tdd"]["verdict"])
         self.assertEqual(fields["exit_status"], record["result"]["exit_status"])
 
-    def test_no_log_writes_nothing_at_all(self):
-        self.run_arm("--no-log")
-        self.assertFalse(self.logs.exists(),
-                         "a disabled run must not create the state directory")
-
-
-if __name__ == "__main__":
-    unittest.main()
