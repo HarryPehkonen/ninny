@@ -87,7 +87,7 @@ test is seen), `request` (record only, the default), `reverse` (code first, test
 required before submit), `off`. `--tdd-prompt` chooses which Testing block the model
 READS, and the two are separate axes, both recorded (`run.tdd_mode`,
 `run.tdd_prompt_mode`). A run that asks for neither is TOLD: the enforced wording ships
-by default. Verdicts: `red-first`, `red-after-code`, `no-red`, `no-tests`.
+by default. Verdicts: `red-first`, `red-after-code`, `no-red`, `no-tests`, `unmeasured`.
 
 **The phases are named, and the model is told which one it is in.** An `enforce`/`reverse`
 run moves through `RED-FIRST -> GREEN -> HAND BACK` (`PHASE_ORDER`/`PHASE_LABELS`/`PHASE_JOBS`

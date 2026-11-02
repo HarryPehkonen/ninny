@@ -160,6 +160,11 @@ class TDDState:
     #: failure of the tree's own suite (a repository). Copied from the task when the state is
     #: created so the record can be read without the task, and so `verdict` agrees with it.
     require_test_file: bool = True
+    #: Whether the run was TOLD which paths are tests. A repository run declares none unless the
+    #: caller passes `--test-glob`, and without it no write can be classified at all -- so the verdict
+    #: says `unmeasured` rather than claiming the run wrote no test file. Copied from the task, like
+    #: the field above, so the record still reads without it.
+    globs_declared: bool = True
 
     @property
     def own_gate_red(self) -> bool:
@@ -227,7 +232,11 @@ class TDDState:
         if self.wrote_nothing:
             return "no-write"
         if not self.test_files:
-            return "no-tests"
+            # `no-tests` claims the run wrote no test FILE, and that claim needs a definition of "test
+            # file". Without --test-glob there is none, so no write can be classified: measured on a
+            # run whose step-12 write WAS its test file and whose verdict still read `no-tests`
+            # (harrisbook post 35). The label was the defect, not the behaviour.
+            return "unmeasured" if not self.globs_declared else "no-tests"
         if not self.red_ok:
             return "no-red"
         if self.first_src_step is None:
@@ -436,10 +445,15 @@ class TDDPolicy:
         # Copied from the task rather than read off it later: the state is the record, and a
         # record that cannot be read without its task is not much of one. getattr keeps the
         # doubles in the existing tests working.
+        globs = getattr(self.task, "test_globs", None)
         return TDDState(
             mode=self.mode,
             phase="impl" if self.mode in ("off", "reverse") else "test",
             require_test_file=getattr(self.task, "require_test_file", True),
+            # An ABSENT attribute means the double does not declare anything. An empty list is a
+            # declaration that nothing was declared -- a repository run without --test-glob -- and
+            # that is the fact the verdict needs.
+            globs_declared=True if globs is None else bool(globs),
         )
 
     def _rel(self, path: str) -> str:

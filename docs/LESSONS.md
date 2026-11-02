@@ -826,6 +826,23 @@ nothing independently validated a repository artifact and the run's own closing 
 refuses; and the observation note now fires at half the budget, not only at the end, since "go and get the
 ground truth" is early work and "hand back what you have" is the only instruction that belongs at the end.
 
+## A label the harness cannot support is worse than no label (2026-11-02)
+
+A repository run was graded `no-tests` when its step-12 write WAS its test file -- `tools/tests/test_route.py`
+-- and the same record showed that write labelled as the run's first SOURCE write. Both sentences were in
+`result.json` at once. The behaviour was defensible: without `--test-glob` the harness has no definition of
+"test file", so it refused to guess. The word was not: `no-tests` reads as "the model wrote no test", which
+was false, and it is the kind of false label this project has spent a week removing.
+
+The distinction is the declaration, not the door. A benchmark names its test globs, so "you wrote no test
+file" is a measurement. A repository declares none unless the caller passes one, so nothing can be classified
+-- and the honest word for that is `unmeasured`, with the reason visible in the docs rather than invented in
+a reader's head.
+
+The general rule, which is the same one behind "a number in prose has no owner and no test": **a word in a
+record is a claim, and a claim the harness cannot support is worse than a gap, because a gap invites a
+question and a wrong label answers it wrongly.**
+
 ## Prose is not maintained by anything (2026-10-27)
 
 A delegate that had never seen this repository was given a fresh clone and asked to drive it. It
