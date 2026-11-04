@@ -234,6 +234,25 @@ def preflight_lines(task, workdir: Path, prompt_text: str,
     else:
         lines.append("the brief names no file path at all -- no entry point to start from")
 
+    # A repository run stages a worktree at HEAD, so anything uncommitted is invisible to it. The
+    # caller writing the brief has the working tree in front of them; the model gets the commit.
+    # Measured: ng-utf8-2 (45 steps) spent its last five on `git log --all` and `git fsck --lost-found`,
+    # hunting history for a path its brief had named that existed only in the caller's working tree.
+    # `--porcelain` excludes ignored paths by construction, which matters -- build/ output is
+    # uncommitted in every project and would otherwise drown the line that is supposed to be a warning.
+    repo_for_status = getattr(args, "repo", None) or getattr(task, "repo", None)
+    if repo_for_status:
+        dirty = _uncommitted(Path(repo_for_status).expanduser())
+        if dirty:
+            head = subprocess.run(["git", "-C", str(Path(repo_for_status).expanduser()),
+                                   "rev-parse", "--short", "HEAD"],
+                                  capture_output=True, text=True).stdout.strip()
+            shown = ", ".join(dirty[:3]) + (f", +{len(dirty) - 3} more" if len(dirty) > 3 else "")
+            lines.append(f"{len(dirty)} uncommitted path(s) at HEAD ({head}): {shown}")
+            lines.append("WARNING: the run stages HEAD in a worktree, so none of those changes are "
+                         "visible to it -- a brief naming one of them has no entry point, and a run "
+                         "without an entry point spends its budget reading and hunting git history")
+
     if args.tdd == "enforce" and not args.test_glob:
         return lines, (
             "REFUSING: --tdd enforce without --test-glob cannot be satisfied. enforce refuses a source "
@@ -242,6 +261,15 @@ def preflight_lines(task, workdir: Path, prompt_text: str,
             "--tdd request."
         )
     return lines, ""
+
+
+def _uncommitted(repo: Path) -> list[str]:
+    """The paths `git status --porcelain` reports, which excludes ignored ones by construction."""
+    done = subprocess.run(["git", "-C", str(repo), "status", "--porcelain"],
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        return []
+    return [line[3:].strip().strip('"') for line in done.stdout.splitlines() if line.strip()]
 
 
 def _task_path(raw: str | None) -> Path:
