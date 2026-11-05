@@ -39,6 +39,29 @@ right and never have observed a red.
 
 ## Lessons — the instrument (all of these were bugs in the harness, not the model)
 
+**The brief's STRUCTURE is not the lever. The gap between the search space and the step budget is.**
+Three arms, one repository task (Ninny itself: a one-sentence fix in one method, same model, 25 steps,
+same `--test-cmd`/`--check-cmd`, same clean tree, same `--protected-glob`), differing only in the brief:
+
+  * a schema-shaped brief -- summary, concrete examples, "first file to touch", "first test to write",
+    acceptance and check commands, explicit out-of-scope;
+  * a competent plain paragraph naming the same file, the symptom and the commands;
+  * the same paragraph with the entry point REMOVED ("find where that sentence is built").
+
+All three: `Submitted`, verdict `artifact`, and GATE PASSED against a frozen acceptance that was proven red
+at HEAD and green on a reference fix BEFORE any arm ran. 23, 23 and 20 steps. $0.0151, $0.0091, $0.0100 --
+the schema brief cost 65% more, because it is longer, and bought nothing measurable. The cheapest arm was
+the one that had to find the file for itself.
+
+What this does and does not say. n=1 per arm, one cheap model, one small task on a small codebase, so
+"brief structure never matters" is NOT established -- only that it did not matter here. What it does say is
+consistent with every other measurement on record: the base arms wrote nothing in 40 steps on a brief that
+named a reading list, `ng-utf8-1` reached the right file at step 23 of 25 and ran out, `ng-utf8-2` reached
+it and finished when given 45. The entry point was never the binding constraint in any of those; the budget
+was. **A brief needs to be competent, not elaborate; what actually decides a run is whether the budget
+covers the search.** Size the steps to the repository, or shrink the repository the run has to search --
+and do not expect a prettier brief to buy back a budget that was too small.
+
 **A task you wrote must be proven passable, and proven discriminating, before it grades anyone.** A
 repository run (NameGenerator) was failed by its own acceptance command: applying the delegate's fix to a
 fresh copy and re-running produced byte-identical failures, `CHECKS: 83 run, 40 failed`, at HEAD and with
