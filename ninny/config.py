@@ -120,6 +120,7 @@ def repo_task(
     timeout_s: int = 120,
     test_timeout_s: int = 600,
     check_cmd: str | None = None,
+    protected_globs: list[str] | None = None,
 ) -> Task:
     """A `Task` for a real repository: no fixture, no oracle, and no seal.
 
@@ -170,7 +171,9 @@ def repo_task(
         timeout_s=timeout_s,
         test_timeout_s=test_timeout_s,
         check_cmd=check_cmd,
-        protected_globs=[],
+        # Declared, never defaulted: a built-in guess about someone else's repository is a guess. In one
+        # live run the delegate could have edited the acceptance command grading it.
+        protected_globs=list(protected_globs or []),
         sandbox_binds=[str(root)],
         require_test_file=False,
     )

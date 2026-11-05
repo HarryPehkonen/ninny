@@ -295,6 +295,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     args.tdd = args.tdd or default_tdd_for(bool(args.repo), args.test_glob)
     task = (
         repo_task(Path(args.repo), repo_prompt(args), args.test_cmd or "",
+                  protected_globs=list(getattr(args, "protected_glob", []) or []),
                   test_globs=args.test_glob, step_limit=args.steps or 60,
                   test_timeout_s=args.test_timeout or 600,
                   check_cmd=getattr(args, "check_cmd", None))
@@ -973,6 +974,11 @@ def build_parser() -> argparse.ArgumentParser:
                      help="a path pattern that is a test file, for --repo (repeatable). Declaring "
                           "one turns on the red-first gate; without it the run records the order "
                           "and enforces the handback instead")
+    run.add_argument("--protected-glob", action="append", default=[],
+                     help="a path pattern the file tools may NOT write, for --repo (repeatable). "
+                          "Declared, never defaulted: name the acceptance command's own files "
+                          "(e.g. --protected-glob 'tools/**') so a run cannot edit what grades it. "
+                          "Holds in every --tdd mode")
     run.add_argument("--model", required=True, help="model id as the endpoint spells it")
     run.add_argument("--provider", help=f"one of {', '.join(sorted(PROVIDERS))}")
     run.add_argument("--wire", choices=["chat", "completions"], default="chat",
